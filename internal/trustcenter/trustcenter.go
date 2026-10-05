@@ -136,6 +136,11 @@ func NormalizeConfig(in platform.TrustCenterConfig) (platform.TrustCenterConfig,
 		d.Note = strings.TrimSpace(d.Note)
 		d.Framework = strings.TrimSpace(d.Framework)
 		d.URL = strings.TrimSpace(d.URL)
+		d.Product = strings.TrimSpace(d.Product)
+		if d.Product != "" && d.Kind != platform.DocVAPTReport {
+			corr = append(corr, Correction{"documents", fmt.Sprintf("%s cannot be scoped to a product; only the penetration test report can", d.Kind)})
+			d.Product = ""
+		}
 
 		if d.Kind == "" {
 			corr = append(corr, Correction{"documents", "a document with no kind was dropped"})
@@ -228,6 +233,9 @@ func ClampVisibility(kind platform.DocKind, want platform.Visibility) (platform.
 // DocumentKey identifies a document within a tenant's config. Kind alone is not enough: a
 // tenant pursuing SOC 2 and HIPAA offers two compliance reports.
 func DocumentKey(d platform.TrustDocument) string {
+	if d.Product != "" {
+		return string(d.Kind) + "/product:" + d.Product
+	}
 	if d.Framework != "" {
 		return string(d.Kind) + "/" + d.Framework
 	}
@@ -246,6 +254,7 @@ type Entry struct {
 	Kind       platform.DocKind    `json:"kind"`
 	Title      string              `json:"title"`
 	Framework  string              `json:"framework,omitempty"`
+	Product    string              `json:"product,omitempty"`
 	Note       string              `json:"note,omitempty"`
 	Visibility platform.Visibility `json:"visibility"`
 	// Readable is whether THIS visitor may open it now. A gated row is listed to an ungated
@@ -278,7 +287,7 @@ func Catalog(cfg platform.TrustCenterConfig, avail Availability, granted bool) [
 		}
 		readable := d.Visibility == platform.VisPublic || granted
 		e := Entry{
-			Kind: d.Kind, Title: DocumentTitle(d), Framework: d.Framework, Note: d.Note,
+			Kind: d.Kind, Title: DocumentTitle(d), Framework: d.Framework, Product: d.Product, Note: d.Note,
 			Visibility: d.Visibility, Readable: readable, Generated: d.Kind.Generated(),
 		}
 		if readable && !d.Kind.Generated() {
@@ -289,13 +298,13 @@ func Catalog(cfg platform.TrustCenterConfig, avail Availability, granted bool) [
 	return out
 }
 
-// Find returns the configured document matching a kind+framework request, and whether it is
+// Find returns the configured document matching a kind+framework+product request, and whether it is
 // readable by this visitor. Every document fetch goes through it, so the listing and the fetch
 // cannot disagree about what is gated — the failure where a row renders locked and the
 // underlying endpoint serves it anyway.
-func Find(cfg platform.TrustCenterConfig, kind platform.DocKind, framework string, avail Availability, granted bool) (platform.TrustDocument, bool) {
+func Find(cfg platform.TrustCenterConfig, kind platform.DocKind, framework, product string, avail Availability, granted bool) (platform.TrustDocument, bool) {
 	for _, d := range cfg.Documents {
-		if d.Kind != kind || d.Framework != framework {
+		if d.Kind != kind || d.Framework != framework || d.Product != product {
 			continue
 		}
 		if d.Visibility == platform.VisPrivate || !avail[DocumentKey(d)] {

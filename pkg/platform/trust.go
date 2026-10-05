@@ -120,6 +120,12 @@ type TrustDocument struct {
 	URL string `json:"url,omitempty"`
 	// Note is the tenant's own one-line context ("Type II, period ending March 2026").
 	Note string `json:"note,omitempty"`
+	// Product scopes a penetration-test report to one CONFIRMED product (Tenant.Products) — what a
+	// buyer reviewing that product is actually buying — instead of the whole workspace. Only the
+	// penetration-test report accepts it. A report whose product no longer exists is WITHHELD, never
+	// served for the whole workspace instead: that would hand a buyer a different scope than the one
+	// the row promises.
+	Product string `json:"product,omitempty"`
 }
 
 // TrustCenterConfig is the tenant's Trust Center settings. It lives on the Tenant rather than

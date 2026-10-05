@@ -55,7 +55,7 @@ export default async function SettingsPage() {
   const [tenant, connections, trust, team, me, aiBom, llm, prBot, notify, jira, escalation, aiMode] = await Promise.all([
     api.tenant(), api.connections(), api.trustLink(), api.team(), api.me(), api.aiBom(), api.llmSettings(), api.prBotSettings(), api.notifySettings(), api.jiraSettings(), api.escalationSettings(), api.aiMode(),
   ]);
-  const [sla, maintenance, contacts, practitioners, training, trustSettings, trustRequests, boardDigest] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings(), api.trustSettings(), api.trustRequests(), api.boardDigest()]);
+  const [sla, maintenance, contacts, practitioners, training, trustSettings, trustRequests, boardDigest, productsView] = await Promise.all([api.slaSettings(), api.maintenanceWindows(), api.contacts(), api.practitioners(), api.trainingSettings(), api.trustSettings(), api.trustRequests(), api.boardDigest(), api.products()]);
   const branding = await api.brandingSettings();
   const drata = await api.drataSettings();
   const [mdm, hris, apiKeys, securityPolicy, ssoSettings, scimSettings] = await Promise.all([api.mdmSettings(), api.hrisSettings(), api.apiKeys(), api.securityPolicy(), api.ssoSettings(), api.scimSettings()]);
@@ -257,7 +257,7 @@ export default async function SettingsPage() {
               behind your approval.
             </p>
             <TrustShare path={trustSettings.link || trust.path} />
-            <TrustCenterControl initial={trustSettings} />
+            <TrustCenterControl initial={trustSettings} products={productsView.products.map((p) => ({ id: p.id, name: p.name }))} />
             <TrustRequestsDesk
               requests={trustRequests.requests}
               ndaRequired={trustRequests.nda_required}

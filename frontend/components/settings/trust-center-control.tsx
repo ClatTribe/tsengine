@@ -19,12 +19,12 @@ import type { TrustCenterConfig, TrustDocument, TrustSettings, TrustSubprocessor
 //     absent from the public page by design (a locked row asserts the document exists), so
 //     without this the honest omission is invisible and reads as a bug.
 
-const KINDS: { kind: string; label: string; hint: string; framework?: boolean; external?: boolean }[] = [
+const KINDS: { kind: string; label: string; hint: string; framework?: boolean; external?: boolean; product?: boolean }[] = [
   { kind: "subprocessors", label: "Sub-processors", hint: "GDPR Art. 28 disclosure — the list you maintain below" },
   { kind: "questionnaire", label: "Security questionnaire", hint: "CAIQ/SIG-lite, answered from live posture" },
   { kind: "policies", label: "Security policies", hint: "Published policies, owners and dates" },
   { kind: "compliance_report", label: "Compliance report", hint: "Gap controls and the findings citing them", framework: true },
-  { kind: "vapt_report", label: "Penetration test report", hint: "Findings, severities and reproduction" },
+  { kind: "vapt_report", label: "Penetration test report", hint: "Findings, severities and reproduction", product: true },
   { kind: "evidence_pack", label: "Signed evidence pack", hint: "Verifiable, not just published", framework: true },
   { kind: "external", label: "External document", hint: "Your SOC 2 report, ISO certificate or DPA — a link you host", external: true },
 ];
@@ -36,7 +36,14 @@ const NEVER_PUBLIC = new Set(["compliance_report", "vapt_report", "evidence_pack
 
 const FRAMEWORKS = Object.keys(FRAMEWORK_LABEL);
 
-export function TrustCenterControl({ initial }: { initial: TrustSettings }) {
+export function TrustCenterControl({
+  initial,
+  products = [],
+}: {
+  initial: TrustSettings;
+  // Confirmed products, so a penetration test report can be scoped to the one a buyer is reviewing.
+  products?: { id: string; name: string }[];
+}) {
   const [cfg, setCfg] = useState<TrustCenterConfig>(initial.config ?? { enabled: false });
   const [link, setLink] = useState(initial.link);
   const [corrections, setCorrections] = useState<{ field: string; reason: string }[]>([]);
@@ -54,7 +61,8 @@ export function TrustCenterControl({ initial }: { initial: TrustSettings }) {
   }
 
   function addDoc(kind: string) {
-    if (docs.some((d) => d.kind === kind && !KINDS.find((k) => k.kind === kind)?.framework)) return;
+    const meta = KINDS.find((k) => k.kind === kind);
+    if (docs.some((d) => d.kind === kind && !meta?.framework && !meta?.product)) return;
     const visibility = NEVER_PUBLIC.has(kind) ? "gated" : "public";
     patch({ documents: [...docs, { kind, visibility } as TrustDocument] });
   }
@@ -171,6 +179,20 @@ export function TrustCenterControl({ initial }: { initial: TrustSettings }) {
                       {FRAMEWORKS.map((f) => (
                         <option key={f} value={f}>
                           {FRAMEWORK_LABEL[f] ?? f}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {meta?.product && (
+                    <select
+                      value={d.product ?? ""}
+                      onChange={(e) => setDoc(i, { product: e.target.value || undefined })}
+                      className="mt-1.5 w-full rounded-lg border border-border bg-surface-2 px-2 py-1 text-[11px] outline-none focus:border-accent"
+                    >
+                      <option value="">Whole workspace</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          Only {p.name}
                         </option>
                       ))}
                     </select>

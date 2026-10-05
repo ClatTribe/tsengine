@@ -304,7 +304,7 @@ func TestFindAgreesWithCatalog(t *testing.T) {
 			}
 		}
 		for _, d := range cfg.Documents {
-			_, ok := Find(cfg, d.Kind, d.Framework, avail, granted)
+			_, ok := Find(cfg, d.Kind, d.Framework, d.Product, avail, granted)
 			if ok != readable[string(d.Kind)+"|"+d.Framework] {
 				t.Errorf("granted=%v %s: Find says %v, Catalog says %v", granted, DocumentKey(d), ok, !ok)
 			}
@@ -318,7 +318,7 @@ func TestFindRefusesAnUnconfiguredDocument(t *testing.T) {
 	cfg := platform.TrustCenterConfig{Documents: []platform.TrustDocument{
 		{Kind: platform.DocSubprocessors, Visibility: platform.VisPublic},
 	}}
-	if _, ok := Find(cfg, platform.DocVAPTReport, "", Availability{"vapt_report": true}, true); ok {
+	if _, ok := Find(cfg, platform.DocVAPTReport, "", "", Availability{"vapt_report": true}, true); ok {
 		t.Fatal("served a document that was never configured")
 	}
 }
@@ -477,5 +477,33 @@ func TestWatermarkNamesTheRecipientAndTheMoment(t *testing.T) {
 	}
 	if anon := Watermark("Northwind", "", at); strings.Contains(anon, "  ") {
 		t.Errorf("empty recipient left a hole: %q", anon)
+	}
+}
+
+// Only the penetration test report can be scoped to a product; anywhere else the product is dropped and
+// the owner is told, rather than kept and silently ignored. Two product reports are two documents.
+func TestProductScopeOnlyOnPentestReport(t *testing.T) {
+	out, corr := NormalizeConfig(platform.TrustCenterConfig{Documents: []platform.TrustDocument{
+		{Kind: platform.DocVAPTReport, Product: "p1"},
+		{Kind: platform.DocVAPTReport, Product: "p2"},
+		{Kind: platform.DocQuestionnaire, Product: "p1"},
+	}})
+	if len(out.Documents) != 3 {
+		t.Fatalf("two product-scoped reports must both survive as distinct documents: %+v", out.Documents)
+	}
+	if out.Documents[2].Product != "" {
+		t.Error("a product on a non-pentest document must be dropped")
+	}
+	named := false
+	for _, c := range corr {
+		if strings.Contains(c.Reason, "cannot be scoped to a product") {
+			named = true
+		}
+	}
+	if !named {
+		t.Errorf("dropping the product must be said: %+v", corr)
+	}
+	if DocumentKey(out.Documents[0]) == DocumentKey(out.Documents[1]) {
+		t.Error("two products' reports must have different keys")
 	}
 }

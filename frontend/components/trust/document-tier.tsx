@@ -43,6 +43,9 @@ export function DocumentTier({
   function docHref(e: TrustDocEntry) {
     const q = new URLSearchParams({ token, kind: e.kind });
     if (e.framework) q.set("framework", e.framework);
+    // A product-scoped report is a different document from the workspace-wide one; without this the
+    // server would (correctly) refuse the fetch.
+    if (e.product) q.set("product", e.product);
     if (access) q.set("access", access);
     return `/api/trust/${encodeURIComponent(tenant)}/doc?${q.toString()}`;
   }

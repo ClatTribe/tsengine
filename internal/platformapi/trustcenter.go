@@ -401,10 +401,11 @@ func (d Deps) handleTrustDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	kind := platform.DocKind(strings.TrimSpace(r.URL.Query().Get("kind")))
 	framework := strings.TrimSpace(r.URL.Query().Get("framework"))
+	product := strings.TrimSpace(r.URL.Query().Get("product"))
 
 	req, granted := d.trustGrant(r.Context(), t.ID, cfg, r.URL.Query().Get("access"))
 	avail, _ := d.trustAvailability(r.Context(), t.ID, cfg)
-	doc, allowed := trustcenter.Find(cfg, kind, framework, avail, granted)
+	doc, allowed := trustcenter.Find(cfg, kind, framework, product, avail, granted)
 	if !allowed {
 		// One response for "no such document", "not available", and "not for you". Telling an
 		// ungranted visitor which of the three applies would confirm the document exists, which
@@ -496,7 +497,18 @@ func (d Deps) renderTrustDocument(ctx context.Context, t platform.Tenant, cfg pl
 		if d.GRC == nil {
 			return "", fmt.Errorf("compliance is not configured")
 		}
-		rep, err := d.GRC.VAPTReport(ctx, t.ID)
+		// A product-scoped report covers exactly that product's assets and says who confirmed the scope.
+		// Its product vanishing is caught by availability; reaching here without it is an error, never a
+		// quiet fall-back to the whole workspace.
+		var ps *grc.ProductScope
+		if doc.Product != "" {
+			p, ok := productScopeFor(t, doc.Product)
+			if !ok {
+				return "", fmt.Errorf("the product this report covers no longer exists")
+			}
+			ps = p
+		}
+		rep, err := d.GRC.VAPTReportFor(ctx, t.ID, ps)
 		if err != nil {
 			return "", err
 		}
@@ -718,6 +730,16 @@ func (d Deps) trustAvailability(ctx context.Context, tenantID string, cfg platfo
 			avail[key] = d.GRC != nil && scanned
 			if !avail[key] {
 				why[key] = "no scan has completed yet, so there is nothing to report on"
+				continue
+			}
+			// Pinned to a product: the product must still exist. Serving the whole workspace in its place
+			// would show a buyer a different scope than the row promises.
+			if doc.Product != "" {
+				t, err := d.Store.GetTenant(ctx, tenantID)
+				if _, ok := productScopeFor(t, doc.Product); err != nil || !ok {
+					avail[key] = false
+					why[key] = "the product this report is scoped to no longer exists — choose another product or remove the row"
+				}
 			}
 		case platform.DocComplianceReport, platform.DocEvidencePack:
 			if d.GRC == nil {

@@ -1033,6 +1033,7 @@ export interface TrustDocEntry {
   kind: string;
   title: string;
   framework?: string;
+  product?: string;
   note?: string;
   visibility: "public" | "gated" | "private";
   readable: boolean;
@@ -1078,6 +1079,9 @@ export interface TrustDocument {
   framework?: string;
   url?: string;
   note?: string;
+  // Penetration test report only: scope it to one confirmed product. Withheld (never widened) if the
+  // product is later removed.
+  product?: string;
 }
 
 export interface TrustCenterConfig {
