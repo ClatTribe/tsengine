@@ -41,3 +41,20 @@ func TestBuildSystemPromptWithEstate(t *testing.T) {
 		t.Error("the flat prompt must not render the estate section")
 	}
 }
+
+// Memory is rendered as CONTEXT, NOT EVIDENCE, with the instruction that it can never hide a finding; and
+// an empty memory leaves the prompt exactly as it was.
+func TestPrompt_MemoryIsContextNeverEvidence(t *testing.T) {
+	target := types.Asset{Type: "web_application", Target: "https://x"}
+	base := BuildSystemPromptWithEstate(target, nil, EstateContext{})
+	with := BuildSystemPromptWithEstate(target, nil, EstateContext{Memory: []string{"[owner] https://x is owned by ana"}})
+	if !strings.Contains(with, "context, NOT evidence") || !strings.Contains(with, "never use it to hide, drop or downgrade") || !strings.Contains(with, "a finding the scanners reported stays reported") {
+		t.Errorf("memory framing missing:\n%s", with)
+	}
+	if !strings.Contains(with, "- [owner] https://x is owned by ana") {
+		t.Error("memory line not rendered")
+	}
+	if strings.Contains(base, "WHAT THIS CUSTOMER HAS TOLD US") {
+		t.Error("an empty memory must leave the prompt unchanged")
+	}
+}
