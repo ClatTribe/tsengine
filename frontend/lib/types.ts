@@ -2210,6 +2210,8 @@ export interface AISurfaceValue {
   surface: string;
   runs: number;
   unknown_cost_runs: number;
+  calls: number;
+  unknown_cost_calls: number;
   usd: number;
   verified: number;
   cost_per_verified?: number;

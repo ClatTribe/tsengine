@@ -147,6 +147,10 @@ type Deps struct {
 	// the deterministic HeuristicSpecGen (today's behaviour). The model widens discovery only; the
 	// deterministic predicate + the RoE Guard still gate every probe, so no LLM false positives.
 	AgentLLM pentest.SpecLLM
+	// AgentLLMFactory, when set, builds a FRESH operator client per resolve so each run's usage is read
+	// from a counter no other tenant shares (aimeter.go). AgentLLM stays the "is a model configured" signal
+	// and the fallback when the factory returns nil.
+	AgentLLMFactory func() pentest.SpecLLM
 	// LeadClient is the operator-global tool-calling client for the L2 Lead/translator (POST
 	// /v1/l2/translate). Wired from l2.ClientFromEnv (Anthropic, OpenAI, or a local Ollama); a tenant's
 	// own configured model takes precedence. Nil → the translator endpoint is gated (400).

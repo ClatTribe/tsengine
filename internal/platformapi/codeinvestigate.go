@@ -81,7 +81,7 @@ func (d Deps) codeInvestigator(tenantID string) func(ctx context.Context, focus 
 			Source:   codeagent.NewGitHubSource(owner, repo, gh.Config["ref"], token),
 		}
 		meter, model := usageMeter(llm)
-		rep, ierr := codeagent.Investigate(ctx, llm, cc, codeagent.Options{MaxIters: 14, Ledger: d.Recorder})
+		rep, ierr := codeagent.Investigate(meteredRun(ctx), llm, cc, codeagent.Options{MaxIters: 14, Ledger: d.Recorder})
 		cost, known := meter()
 		d.recordAISpend(ctx, tenantID, "code", "code", cost, known, model, 0)
 		if ierr != nil {
@@ -139,7 +139,7 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 	started := time.Now()
 
 	meter, model := usageMeter(llm)
-	rep, ierr := codeagent.Investigate(r.Context(), llm, cc, codeagent.Options{MaxIters: 24, Ledger: d.Recorder})
+	rep, ierr := codeagent.Investigate(meteredRun(r.Context()), llm, cc, codeagent.Options{MaxIters: 24, Ledger: d.Recorder})
 	cost, known := meter()
 	codeVerified := 0 // set once the run's findings are saved; read by the deferred spend record
 	defer func() { d.recordAISpend(r.Context(), tenantID, "code", "code", cost, known, model, codeVerified) }()

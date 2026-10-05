@@ -7,11 +7,20 @@ import type { AIValue } from "@/lib/types";
 // findings the runs themselves VERIFIED, not findings they mentioned; and fixes proven closed are shown as
 // context, never credited to the AI, because the fix may have come from anywhere.
 
-const LABEL: Record<string, string> = { estate: "Whole-estate reviews", issue: "Issue investigations", cloud: "Cloud specialist", code: "Code specialist" };
+const LABEL: Record<string, string> = {
+  estate: "Whole-estate reviews",
+  issue: "Issue investigations",
+  cloud: "Cloud",
+  code: "Code",
+  pentest: "AI Pentester",
+  compliance: "Compliance",
+  eval: "Your eval suite",
+  other: "Other AI work",
+};
 const usd = (n: number) => `$${n.toFixed(2)}`;
 
 export function AIValueCard({ v }: { v: AIValue }) {
-  if (v.total.runs === 0) {
+  if (v.total.runs === 0 && v.total.calls === 0) {
     return (
       <div className="card p-4 text-xs text-muted">
         No AI runs in the last {v.days} days, so there is nothing to weigh yet.
@@ -35,10 +44,15 @@ export function AIValueCard({ v }: { v: AIValue }) {
           {[...v.surfaces, v.total].map((s) => (
             <tr key={s.surface} className={s.surface === "all" ? "border-t border-border font-medium" : ""}>
               <td className="py-1">{s.surface === "all" ? "Total" : (LABEL[s.surface] ?? s.surface)}</td>
-              <td className="text-right">{s.runs}</td>
+              <td className="text-right">
+                {s.runs}
+                {s.calls > 0 && <span className="text-faint"> + {s.calls} model calls</span>}
+              </td>
               <td className="text-right">
                 {usd(s.usd)}
-                {s.unknown_cost_runs > 0 && <span className="text-faint"> + {s.unknown_cost_runs} unpriced</span>}
+                {s.unknown_cost_runs + s.unknown_cost_calls > 0 && (
+                  <span className="text-faint"> + {s.unknown_cost_runs + s.unknown_cost_calls} unpriced</span>
+                )}
               </td>
               <td className="text-right">{s.verified}</td>
               <td className="text-right">
@@ -49,7 +63,9 @@ export function AIValueCard({ v }: { v: AIValue }) {
         </tbody>
       </table>
       <p className="text-[11px] text-faint">
-        &ldquo;Unpriced&rdquo; runs used a model that reported no usage — their cost is unknown, not zero, so cost per proof
+        &ldquo;Model calls&rdquo; are single requests made outside a priced run — a code sweep, exploit proposals, CWE
+        attribution — and count toward your monthly AI budget like runs do. &ldquo;Unpriced&rdquo; runs or calls used a
+        model that reported no usage — their cost is unknown, not zero, so cost per proof
         is not shown where they occur. {v.fixes_proven_closed} fix(es) were proven closed by a re-test in this period;
         that is shown for context and not credited to the AI.
         {v.unmetered.length > 0 && <> Not yet counted here: {v.unmetered.join(", ")}.</>}

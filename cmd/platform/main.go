@@ -475,8 +475,17 @@ func main() {
 	// ModeDeep D-agent: the LLM spec generator. cloudengine.LLMFromEnv resolves a cloud key OR a local
 	// Ollama (LLM_BASE_URL); nil when neither is configured → the deterministic HeuristicSpecGen.
 	var agentLLM pentest.SpecLLM
+	var agentLLMFactory func() pentest.SpecLLM
 	if llm, ok := cloudengine.LLMFromEnv(); ok {
 		agentLLM = llm
+		// A fresh client per tenant run, so each run's usage is read from its own counter rather than
+		// one every tenant shares (internal/platformapi/aimeter.go).
+		agentLLMFactory = func() pentest.SpecLLM {
+			if c, ok := cloudengine.LLMFromEnv(); ok {
+				return c
+			}
+			return nil
+		}
 		log.Print("[platform] ModeDeep D-agent wired (LLM spec generator) — open-ended exploitation proposals, deterministically validated")
 
 		// Detection Skills (ADR 0017): load the library and attach it to the detector so an opening
@@ -622,7 +631,7 @@ func main() {
 		// Defaults to the public base (same-origin behind the TLS edge), override with TSENGINE_APP_URL.
 		AppURL:             envOr("TSENGINE_APP_URL", os.Getenv("TSENGINE_PLATFORM_PUBLIC")),
 		SlackSigningSecret: os.Getenv("TSENGINE_SLACK_SIGNING_SECRET"),
-		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, AuthzProber: authzProber, Interactor: interactor, Browser: browser, AgentLLM: agentLLM, LeadClient: leadClient,
+		WebhookSecret:      os.Getenv("TSENGINE_WEBHOOK_SECRET"), NewID: newID, Prober: prober, AuthzProber: authzProber, Interactor: interactor, Browser: browser, AgentLLM: agentLLM, AgentLLMFactory: agentLLMFactory, LeadClient: leadClient,
 		Mailer: email.FromEnv(), // transactional email (password reset/invite); no-op until SMTP_* is set
 	}
 	// Auto-review (framework: auto-invoke the AI Security Engineer after a scan): when a monitoring pass

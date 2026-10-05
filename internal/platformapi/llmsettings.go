@@ -229,16 +229,32 @@ func (d Deps) resolveAgentLLMForRole(ctx context.Context, tenantID string, role 
 	// is actually reached (and handles anthropic — the UI default — which ClientFor used to drop).
 	if cfg, key, ok := d.resolveTenantLLMConfigForRole(ctx, tenantID, role); ok {
 		if c, ok := cloudengine.ClientForURL(cfg.Provider, cfg.Model, key, cfg.BaseURL); ok {
-			return c // cloudengine.LLM satisfies pentest.SpecLLM (same Generate method)
+			return d.meter(ctx, c, tenantID) // cloudengine.LLM satisfies pentest.SpecLLM (same Generate method)
 		}
 	}
 	// The operator-global LLM (d.AgentLLM) spends OUR budget — gate it behind an AI-enabled plan so the
 	// Free tier never costs us LLM money (the economic invariant). The DEV-only TSENGINE_DEV_LLM_ALL_PLANS
 	// override (operatorLLMAllowed) lets `make dev` + the file-relay proxy power any test tenant.
 	if d.operatorLLMAllowed(ctx, tenantID) {
-		return d.AgentLLM
+		return d.meter(ctx, d.operatorAgentLLM(), tenantID)
 	}
 	return nil
+}
+
+// operatorAgentLLM is the operator-funded client for ONE resolve. With a factory it is fresh, so its usage
+// counter is this run's alone; the shared d.AgentLLM accumulates every tenant's calls, and a delta read
+// across a run on it can include another tenant's tokens. The shared client is the fallback when no
+// factory is wired (tests, and deployments that construct Deps by hand).
+func (d Deps) operatorAgentLLM() pentest.SpecLLM {
+	if d.AgentLLM == nil {
+		return nil
+	}
+	if d.AgentLLMFactory != nil {
+		if c := d.AgentLLMFactory(); c != nil {
+			return c
+		}
+	}
+	return d.AgentLLM
 }
 
 // aiAllowed resolves what the tenant has chosen and is entitled to run. A store error resolves to the
