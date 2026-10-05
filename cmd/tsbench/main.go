@@ -197,6 +197,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "tsbench rlvr: %v\n", err)
 			os.Exit(1)
 		}
+	case "codereview":
+		if err := codereviewCmd(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "tsbench codereview: %v\n", err)
+			os.Exit(1)
+		}
 	case "cwemap":
 		if err := cwemapCmd(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "tsbench cwemap: %v\n", err)

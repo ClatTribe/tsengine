@@ -1,0 +1,41 @@
+{
+  "id": "GHSA-4x45-gxvp-6283",
+  "ecosystem": "npm",
+  "repo": "argos-ci/argos-javascript",
+  "pre_fix_commit": "1787fe78cba46f408493e02114150f2d73f47fa4",
+  "fix_commit": "8355f3af3be3f4fe361d58a688d21535cf672717",
+  "published_at": "2026-09-10",
+  "severity": "high",
+  "cwes": [
+    "CWE-78"
+  ],
+  "summary": "@argos-ci/core: CI Branch Name OS Command Injection",
+  "source": "https://github.com/advisories/GHSA-4x45-gxvp-6283",
+  "golden": [
+    {
+      "file": "packages/core/src/ci-environment/git.ts",
+      "start": 1,
+      "end": 1
+    },
+    {
+      "file": "packages/core/src/ci-environment/git.ts",
+      "start": 67,
+      "end": 67
+    },
+    {
+      "file": "packages/core/src/ci-environment/git.ts",
+      "start": 88,
+      "end": 90
+    },
+    {
+      "file": "packages/core/src/ci-environment/git.ts",
+      "start": 153,
+      "end": 154
+    },
+    {
+      "file": "packages/core/src/ci-environment/git.ts",
+      "start": 162,
+      "end": 162
+    }
+  ]
+}

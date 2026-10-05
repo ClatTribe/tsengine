@@ -1,0 +1,56 @@
+{
+  "id": "GHSA-g28h-2cmm-rj9x",
+  "ecosystem": "pip",
+  "repo": "langchain-ai/langchain-nvidia",
+  "pre_fix_commit": "7ebc4cb23a756cd54931b6deb8c6f0450f32ff02",
+  "fix_commit": "b483c7cad07dd9d5fd0fee2668238c4a08825d86",
+  "published_at": "2026-09-24",
+  "severity": "high",
+  "cwes": [
+    "CWE-22"
+  ],
+  "summary": "langchain-nvidia-ai-endpoints has local file disclosure through VLM image inputs",
+  "source": "https://github.com/advisories/GHSA-g28h-2cmm-rj9x",
+  "golden": [
+    {
+      "file": "libs/ai-endpoints/langchain_nvidia_ai_endpoints/_utils.py",
+      "start": 3,
+      "end": 3
+    },
+    {
+      "file": "libs/ai-endpoints/langchain_nvidia_ai_endpoints/_utils.py",
+      "start": 5,
+      "end": 5
+    },
+    {
+      "file": "libs/ai-endpoints/langchain_nvidia_ai_endpoints/_utils.py",
+      "start": 40,
+      "end": 48
+    },
+    {
+      "file": "libs/ai-endpoints/langchain_nvidia_ai_endpoints/_utils.py",
+      "start": 51,
+      "end": 51
+    },
+    {
+      "file": "libs/ai-endpoints/langchain_nvidia_ai_endpoints/chat_models.py",
+      "start": 138,
+      "end": 138
+    },
+    {
+      "file": "libs/ai-endpoints/langchain_nvidia_ai_endpoints/reranking.py",
+      "start": 172,
+      "end": 172
+    },
+    {
+      "file": "libs/ai-endpoints/langchain_nvidia_ai_endpoints/reranking.py",
+      "start": 176,
+      "end": 176
+    },
+    {
+      "file": "libs/ai-endpoints/langchain_nvidia_ai_endpoints/reranking.py",
+      "start": 180,
+      "end": 180
+    }
+  ]
+}

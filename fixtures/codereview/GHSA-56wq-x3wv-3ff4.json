@@ -1,0 +1,26 @@
+{
+  "id": "GHSA-56wq-x3wv-3ff4",
+  "ecosystem": "go",
+  "repo": "seaweedfs/seaweedfs",
+  "pre_fix_commit": "4f8af455bf954a5d5f07b8f74d1a1b7d8f60fa53",
+  "fix_commit": "b44cf51fe931bd75aa4d37ae766bea90d7f85ccd",
+  "published_at": "2026-08-28",
+  "severity": "high",
+  "cwes": [
+    "CWE-22"
+  ],
+  "summary": "SeaweedFS: Path traversal in the S3 gateway X-Amz-Copy-Source header allows cross-bucket object read",
+  "source": "https://github.com/advisories/GHSA-56wq-x3wv-3ff4",
+  "golden": [
+    {
+      "file": "weed/s3api/s3api_copy_validation.go",
+      "start": 267,
+      "end": 267
+    },
+    {
+      "file": "weed/s3api/s3api_object_handlers_copy.go",
+      "start": 767,
+      "end": 772
+    }
+  ]
+}

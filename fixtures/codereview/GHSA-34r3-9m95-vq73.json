@@ -1,0 +1,181 @@
+{
+  "id": "GHSA-34r3-9m95-vq73",
+  "ecosystem": "pip",
+  "repo": "open-webui/open-webui",
+  "pre_fix_commit": "ca4e07a40b4ff11989a25d84b517d3d0049f93ae",
+  "fix_commit": "e3e4bd87df6fc629e7e22081d980d55a7632b8b7",
+  "published_at": "2026-09-10",
+  "severity": "high",
+  "cwes": [
+    "CWE-918"
+  ],
+  "summary": "Open WebUI: Any authenticated user can reach the Azure platform channel via server-side web fetch",
+  "source": "https://github.com/advisories/GHSA-34r3-9m95-vq73",
+  "golden": [
+    {
+      "file": "backend/open_webui/config.py",
+      "start": 1113,
+      "end": 1113
+    },
+    {
+      "file": "backend/open_webui/config.py",
+      "start": 1119,
+      "end": 1119
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/main.py",
+      "start": 3,
+      "end": 3
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/main.py",
+      "start": 8,
+      "end": 8
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/main.py",
+      "start": 17,
+      "end": 24
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 26,
+      "end": 26
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 67,
+      "end": 67
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 83,
+      "end": 86
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 88,
+      "end": 88
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 99,
+      "end": 101
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 104,
+      "end": 105
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 108,
+      "end": 108
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 131,
+      "end": 137
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 139,
+      "end": 142
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 144,
+      "end": 148
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 169,
+      "end": 169
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 180,
+      "end": 183
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 226,
+      "end": 226
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 234,
+      "end": 234
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 236,
+      "end": 237
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 239,
+      "end": 244
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 249,
+      "end": 249
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 258,
+      "end": 258
+    },
+    {
+      "file": "backend/open_webui/retrieval/web/utils.py",
+      "start": 915,
+      "end": 915
+    },
+    {
+      "file": "backend/open_webui/utils/misc.py",
+      "start": 4,
+      "end": 4
+    },
+    {
+      "file": "backend/open_webui/utils/misc.py",
+      "start": 10,
+      "end": 10
+    },
+    {
+      "file": "backend/open_webui/utils/misc.py",
+      "start": 89,
+      "end": 89
+    },
+    {
+      "file": "backend/open_webui/utils/misc.py",
+      "start": 94,
+      "end": 95
+    },
+    {
+      "file": "backend/open_webui/utils/misc.py",
+      "start": 100,
+      "end": 100
+    },
+    {
+      "file": "backend/open_webui/utils/misc.py",
+      "start": 110,
+      "end": 110
+    },
+    {
+      "file": "backend/open_webui/utils/misc.py",
+      "start": 115,
+      "end": 115
+    },
+    {
+      "file": "backend/open_webui/utils/misc.py",
+      "start": 122,
+      "end": 123
+    },
+    {
+      "file": "backend/open_webui/utils/misc.py",
+      "start": 125,
+      "end": 125
+    }
+  ]
+}

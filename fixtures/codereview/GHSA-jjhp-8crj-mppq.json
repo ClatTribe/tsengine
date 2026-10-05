@@ -1,0 +1,37 @@
+{
+  "id": "GHSA-jjhp-8crj-mppq",
+  "ecosystem": "npm",
+  "repo": "roomi-fields/notebooklm-mcp",
+  "pre_fix_commit": "50f74d6bec799687066a25355894077577683231",
+  "fix_commit": "13828d9ff3933839ce14c1797d3b20a6bb7694a6",
+  "published_at": "2026-09-22",
+  "severity": "high",
+  "cwes": [
+    "CWE-22",
+    "CWE-73"
+  ],
+  "summary": "@roomi-fields/notebooklm-mcp has a path traversal in vault.batch tool that allows arbitrary file write outside intended vault directory",
+  "source": "https://github.com/advisories/GHSA-jjhp-8crj-mppq",
+  "golden": [
+    {
+      "file": "src/tools/index.ts",
+      "start": 1355,
+      "end": 1355
+    },
+    {
+      "file": "src/utils/vault-writer.ts",
+      "start": 77,
+      "end": 77
+    },
+    {
+      "file": "src/utils/vault-writer.ts",
+      "start": 262,
+      "end": 262
+    },
+    {
+      "file": "website/docusaurus.config.ts",
+      "start": 51,
+      "end": 51
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "GHSA-xhq9-whgq-49j5",
+  "ecosystem": "npm",
+  "repo": "vendurehq/vendure",
+  "pre_fix_commit": "d61f3ffc8e5cf1d913942022bc672d28a26aa557",
+  "fix_commit": "d7aa42a3f0cb524297a1a2fdf700e4aba9aca684",
+  "published_at": "2026-09-17",
+  "severity": "high",
+  "cwes": [
+    "CWE-79"
+  ],
+  "summary": "Vendure has stored XSS in the Admin Dashboard via unsafe HTML-stripping (innerHTML) of entity descriptions",
+  "source": "https://github.com/advisories/GHSA-xhq9-whgq-49j5",
+  "golden": [
+    {
+      "file": "packages/dashboard/src/lib/components/shared/table-cell/order-table-cell-components.tsx",
+      "start": 53,
+      "end": 55
+    }
+  ]
+}

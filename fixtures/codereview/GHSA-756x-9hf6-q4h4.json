@@ -1,0 +1,41 @@
+{
+  "id": "GHSA-756x-9hf6-q4h4",
+  "ecosystem": "pip",
+  "repo": "omnigent-ai/omnigent",
+  "pre_fix_commit": "1a05b7b139ef504bf2be89bf37918abe104fb95c",
+  "fix_commit": "1f3f398f41cbf97b905133c21e848621c21da6e0",
+  "published_at": "2026-09-02",
+  "severity": "high",
+  "cwes": [
+    "CWE-94"
+  ],
+  "summary": "Omnigent: Uploaded Agent Bundle Allows Authenticated Runner RCE via Python Callable Tools",
+  "source": "https://github.com/advisories/GHSA-756x-9hf6-q4h4",
+  "golden": [
+    {
+      "file": "omnigent/server/bundles.py",
+      "start": 10,
+      "end": 10
+    },
+    {
+      "file": "omnigent/server/bundles.py",
+      "start": 60,
+      "end": 61
+    },
+    {
+      "file": "omnigent/server/bundles.py",
+      "start": 89,
+      "end": 91
+    },
+    {
+      "file": "omnigent/server/bundles.py",
+      "start": 93,
+      "end": 96
+    },
+    {
+      "file": "omnigent/server/bundles.py",
+      "start": 109,
+      "end": 109
+    }
+  ]
+}

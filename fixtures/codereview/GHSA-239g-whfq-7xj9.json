@@ -1,0 +1,127 @@
+{
+  "id": "GHSA-239g-whfq-7xj9",
+  "ecosystem": "pip",
+  "repo": "gitpython-developers/GitPython",
+  "pre_fix_commit": "d160fb4124a56bd463a542a7bbff623354fb3397",
+  "fix_commit": "c7cf4d13b1ed0a2e70f2a1f3c6b4fc6c2652cf0b",
+  "published_at": "2026-09-30",
+  "severity": "high",
+  "cwes": [
+    "CWE-94",
+    "CWE-427"
+  ],
+  "summary": "GitPython: Repository content can impersonate the git directory, leading to arbitrary code execution",
+  "source": "https://github.com/advisories/GHSA-239g-whfq-7xj9",
+  "golden": [
+    {
+      "file": "git/repo/base.py",
+      "start": 48,
+      "end": 48
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 236,
+      "end": 236
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 271,
+      "end": 271
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 293,
+      "end": 294
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 300,
+      "end": 313
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 315,
+      "end": 316
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 318,
+      "end": 318
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 320,
+      "end": 320
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 322,
+      "end": 323
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 343,
+      "end": 358
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 368,
+      "end": 368
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 376,
+      "end": 381
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 389,
+      "end": 389
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 392,
+      "end": 392
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 993,
+      "end": 993
+    },
+    {
+      "file": "git/repo/base.py",
+      "start": 1014,
+      "end": 1014
+    },
+    {
+      "file": "git/repo/fun.py",
+      "start": 62,
+      "end": 62
+    },
+    {
+      "file": "git/repo/fun.py",
+      "start": 69,
+      "end": 78
+    },
+    {
+      "file": "git/repo/fun.py",
+      "start": 87,
+      "end": 87
+    },
+    {
+      "file": "git/repo/fun.py",
+      "start": 89,
+      "end": 89
+    },
+    {
+      "file": "git/repo/fun.py",
+      "start": 93,
+      "end": 99
+    },
+    {
+      "file": "git/repo/fun.py",
+      "start": 107,
+      "end": 126
+    }
+  ]
+}

@@ -1,0 +1,188 @@
+{
+  "id": "GHSA-9gfj-28hw-jchp",
+  "ecosystem": "npm",
+  "repo": "knowns-dev/knowns",
+  "pre_fix_commit": "d3989829fb5095666d23d005b2f78a082832a396",
+  "fix_commit": "09c5a96fd5817b941dc86669278c1a17db10ed4e",
+  "published_at": "2026-09-25",
+  "severity": "high",
+  "cwes": [
+    "CWE-22",
+    "CWE-306",
+    "CWE-863"
+  ],
+  "summary": "Knowns Unrestricted Path Traversal leading to out-of-bounds arbitrary .md file read, write, and deletion in MCP Docs + Memory Tools",
+  "source": "https://github.com/advisories/GHSA-9gfj-28hw-jchp",
+  "golden": [
+    {
+      "file": "internal/models/memory.go",
+      "start": 4,
+      "end": 4
+    },
+    {
+      "file": "internal/models/memory.go",
+      "start": 8,
+      "end": 8
+    },
+    {
+      "file": "internal/models/memory.go",
+      "start": 179,
+      "end": 179
+    },
+    {
+      "file": "internal/server/routes/templates.go",
+      "start": 10,
+      "end": 10
+    },
+    {
+      "file": "internal/server/routes/templates.go",
+      "start": 110,
+      "end": 117
+    },
+    {
+      "file": "internal/server/routes/templates.go",
+      "start": 122,
+      "end": 126
+    },
+    {
+      "file": "internal/server/routes/templates.go",
+      "start": 304,
+      "end": 304
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 11,
+      "end": 11
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 125,
+      "end": 126
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 129,
+      "end": 129
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 146,
+      "end": 146
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 158,
+      "end": 158
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 174,
+      "end": 174
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 177,
+      "end": 177
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 186,
+      "end": 186
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 189,
+      "end": 189
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 192,
+      "end": 192
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 203,
+      "end": 203
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 207,
+      "end": 208
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 345,
+      "end": 346
+    },
+    {
+      "file": "internal/storage/doc_store.go",
+      "start": 349,
+      "end": 349
+    },
+    {
+      "file": "internal/storage/memory_store.go",
+      "start": 135,
+      "end": 135
+    },
+    {
+      "file": "internal/storage/memory_store.go",
+      "start": 203,
+      "end": 203
+    },
+    {
+      "file": "internal/storage/memory_store.go",
+      "start": 234,
+      "end": 234
+    },
+    {
+      "file": "internal/storage/memory_store.go",
+      "start": 258,
+      "end": 258
+    },
+    {
+      "file": "internal/storage/memory_store.go",
+      "start": 261,
+      "end": 261
+    },
+    {
+      "file": "internal/storage/memory_store.go",
+      "start": 332,
+      "end": 332
+    },
+    {
+      "file": "internal/storage/memory_store.go",
+      "start": 351,
+      "end": 351
+    },
+    {
+      "file": "internal/storage/memory_store.go",
+      "start": 435,
+      "end": 435
+    },
+    {
+      "file": "internal/storage/template_store.go",
+      "start": 9,
+      "end": 9
+    },
+    {
+      "file": "internal/storage/template_store.go",
+      "start": 24,
+      "end": 31
+    },
+    {
+      "file": "internal/storage/template_store.go",
+      "start": 112,
+      "end": 112
+    },
+    {
+      "file": "internal/storage/template_store.go",
+      "start": 115,
+      "end": 115
+    },
+    {
+      "file": "internal/storage/template_store.go",
+      "start": 171,
+      "end": 171
+    }
+  ]
+}

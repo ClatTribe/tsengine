@@ -1,0 +1,91 @@
+{
+  "id": "GHSA-q69g-4hcv-6jg4",
+  "ecosystem": "npm",
+  "repo": "CycloneDX/cyclonedx-node-npm",
+  "pre_fix_commit": "ee61a4416b45410dae2e5e65a97aebff6cac24f5",
+  "fix_commit": "15d3beb5bcd2b0b6eccfdf31192f5103b3f12c0f",
+  "published_at": "2026-09-17",
+  "severity": "high",
+  "cwes": [
+    "CWE-78"
+  ],
+  "summary": "@cyclonedx/cyclonedx-npm: Shell Injection via Unsanitized --workspace Argument on Windows",
+  "source": "https://github.com/advisories/GHSA-q69g-4hcv-6jg4",
+  "golden": [
+    {
+      "file": "src/npmRunner.ts",
+      "start": 20,
+      "end": 25
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 27,
+      "end": 27
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 46,
+      "end": 47
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 53,
+      "end": 53
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 57,
+      "end": 57
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 62,
+      "end": 64
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 69,
+      "end": 69
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 72,
+      "end": 73
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 77,
+      "end": 78
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 82,
+      "end": 87
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 90,
+      "end": 90
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 93,
+      "end": 99
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 105,
+      "end": 107
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 109,
+      "end": 112
+    },
+    {
+      "file": "src/npmRunner.ts",
+      "start": 115,
+      "end": 125
+    }
+  ]
+}

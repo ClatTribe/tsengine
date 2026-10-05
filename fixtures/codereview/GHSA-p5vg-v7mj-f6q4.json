@@ -1,0 +1,36 @@
+{
+  "id": "GHSA-p5vg-v7mj-f6q4",
+  "ecosystem": "go",
+  "repo": "frain-dev/convoy",
+  "pre_fix_commit": "8c38a84fb8e649a5ca500349ef6bc4e8b3bf6be6",
+  "fix_commit": "1cc67cd16fb1f8890cc83a3998d3f92dceb7fd06",
+  "published_at": "2026-09-18",
+  "severity": "high",
+  "cwes": [
+    "CWE-639"
+  ],
+  "summary": "Convoy: Cross-Tenant Source IDOR Leaks Plaintext Message Broker Credentials",
+  "source": "https://github.com/advisories/GHSA-p5vg-v7mj-f6q4",
+  "golden": [
+    {
+      "file": "auth/realm/jwt/jwt.go",
+      "start": 7,
+      "end": 7
+    },
+    {
+      "file": "auth/realm/jwt/jwt.go",
+      "start": 133,
+      "end": 133
+    },
+    {
+      "file": "internal/sources/impl.go",
+      "start": 435,
+      "end": 435
+    },
+    {
+      "file": "internal/sources/impl.go",
+      "start": 446,
+      "end": 446
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "GHSA-89vx-jh4q-vg3w",
+  "ecosystem": "npm",
+  "repo": "deepstreamIO/deepstream.io",
+  "pre_fix_commit": "3abde8de3df91e1b6d18f719d9e38e94bfa314f6",
+  "fix_commit": "1c2adde6581c53ef47e204364bc740bc3c2e2e2a",
+  "published_at": "2026-09-22",
+  "severity": "high",
+  "cwes": [
+    "CWE-862"
+  ],
+  "summary": "deepstream: PATCH_MULTI action bypasses Valve permission system allowing unauthorized record writes",
+  "source": "https://github.com/advisories/GHSA-89vx-jh4q-vg3w",
+  "golden": [
+    {
+      "file": "src/services/permission/valve/rules-map.ts",
+      "start": 50,
+      "end": 50
+    }
+  ]
+}
