@@ -188,6 +188,10 @@ type Tenant struct {
 	ExposureObjective *ExposureObjective `json:"exposure_objective,omitempty"`
 	// BoardDigest schedules the board report as an email (internal/platformapi/boardmail.go). Nil = off.
 	BoardDigest *BoardDigest `json:"board_digest,omitempty"`
+	// AgentNotes are what the workspace has told its AI engineer in its own words ("payments-api is
+	// owned by the platform team"; "we never auto-merge on Fridays"). Context for the agent, never
+	// evidence for a finding (internal/agentmemory).
+	AgentNotes []AgentNote `json:"agent_notes,omitempty"`
 	// SLA is the per-tenant remediation SLA policy (per-severity time-to-acknowledge +
 	// time-to-resolve targets). nil/disabled = no SLA tracking. No secret material.
 	SLA *SLAPolicy `json:"sla,omitempty"`
@@ -2332,4 +2336,12 @@ func (b BoardDigest) NextDue() time.Time {
 		return b.LastSentAt.AddDate(0, 1, 0)
 	}
 	return b.LastSentAt.AddDate(0, 0, 7)
+}
+
+// AgentNote is one thing a person told the AI engineer. By is the signed-in author, never typed.
+type AgentNote struct {
+	ID   string    `json:"id"`
+	Text string    `json:"text"`
+	By   string    `json:"by"`
+	At   time.Time `json:"at"`
 }

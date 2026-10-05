@@ -134,6 +134,7 @@ func (d Deps) runEstateAgent(ctx context.Context, tenantID string, client l2.Cli
 	estate := l2.EstateContext{
 		Issues:      toIssueDigests(crossdetect.UnifiedIssues(allFindings)),
 		AttackPaths: renderChains(crossdetect.Correlate(pAssets, allFindings)),
+		Memory:      d.agentMemory(ctx, tenantID, pAssets).PromptLines(),
 	}
 	dep := l2.Deps{Target: target, L1Findings: l1Findings}
 	// ADR 0032 D6 (wiring completion): the walkable estate graph powers traverse_estate.

@@ -14,6 +14,7 @@ import {
   Sparkles,
   ClipboardCheck,
   Activity, LifeBuoy,
+  BookOpen,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,7 @@ const NAV_GROUPS: { header?: string; items: NavItem[] }[] = [
     items: [
       { href: "/engineer", label: "Console", icon: Sparkles },
       { href: "/issues", label: "Issues", icon: Layers },
+      { href: "/memory", label: "What it knows", icon: BookOpen },
     ],
   },
   {

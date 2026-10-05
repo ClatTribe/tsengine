@@ -2187,3 +2187,18 @@ export interface SCIMSettings {
   deactivated: number;
   token?: string;
 }
+
+// GET /v1/agent-memory — exactly what the AI engineer is told about this workspace (internal/agentmemory;
+// the same builder feeds the prompt). Context for the agent, never evidence for a finding.
+export interface AgentMemoryLine {
+  kind: "note" | "owner" | "out_of_scope" | "decision" | "declined_fix" | "explain";
+  text: string;
+  source: string;
+  by?: string;
+  at?: string;
+  note_id?: string;
+}
+export interface AgentMemory {
+  lines: AgentMemoryLine[];
+  omitted?: Record<string, number>;
+}

@@ -41,6 +41,10 @@ type IssueDigest struct {
 type EstateContext struct {
 	Issues      []IssueDigest
 	AttackPaths []string // pre-rendered chain summaries, highest-severity first
+	// Memory is what this customer has told us (internal/agentmemory): owners, scope, risk decisions,
+	// rejected fixes, where our evidence did not convince them, and their own notes. Rendered as
+	// CONTEXT, never evidence.
+	Memory []string
 }
 
 // BuildSystemPrompt is the estate-free prompt (back-compat for callers/tests with no correlation).
@@ -75,6 +79,17 @@ Rules:
 Target: %s (%s)
 `, target.Target, target.Type)
 
+	if len(estate.Memory) > 0 {
+		b.WriteString("\nWHAT THIS CUSTOMER HAS TOLD US — context, NOT evidence. Use it to route work to the named owner, " +
+			"keep to their scope, avoid re-proposing a fix they rejected, and explain better where they said our " +
+			"evidence did not convince them. Never cite it as proof of a finding, and never use it to hide, drop or " +
+			"downgrade one — a finding the scanners reported stays reported:\n")
+		for _, line := range estate.Memory {
+			b.WriteString("- ")
+			b.WriteString(line)
+			b.WriteByte('\n')
+		}
+	}
 	if len(estate.Issues) > 0 {
 		b.WriteString("\nUNIFIED ISSUES — your PRIMARY triage surface (deduped + corroborated across every tool and surface; reason over THESE, drill into the raw findings only for detail):\n")
 		for _, line := range digestIssues(estate.Issues) {
