@@ -73,6 +73,7 @@ provider (§5–§6).
 | `TSENGINE_SANDBOX_IMAGE` | | `tsengine/sandbox:latest` | Engine sandbox image ref. |
 | `TSENGINE_PLATFORM_NO_ENGINE` | | unset | `1` → boot without the sandbox engine (non-tech `operate` tenants still scan). |
 | `TSENGINE_MONITOR_INTERVAL` | | `12h` | Continuous re-scan cadence (e.g. `6h`). `0` disables the scheduler. |
+| `TSENGINE_EVENT_POLL_INTERVAL` | | `10m` | How often CloudTrail and identity-provider audit logs are read between full passes, so an incident opens minutes after the event. Minimum `1m`; `0` disables (the full pass still reads them). Paid plans only, like the full pass. |
 
 ### Connectors (set the pair for each provider you want to offer)
 | Var | Provider |

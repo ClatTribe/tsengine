@@ -32,6 +32,7 @@ type IdentityLogResult struct {
 // window that reads as "no attack". The cursor advances only past events actually read. `ran` is
 // true only when at least one provider was read.
 func (s *Service) SyncIdentityLogs(ctx context.Context, tenantID string) (IdentityLogResult, bool) {
+	defer lockEvents(tenantID)()
 	res := IdentityLogResult{Findings: []types.Finding{}, Failed: map[string]string{}, Unmapped: map[string]int{}, ChecksNotRun: map[string]string{}}
 	if s.Store == nil || s.Tokens == nil || s.NewID == nil || len(s.IdentityLogFetchers) == 0 {
 		return res, false
@@ -85,7 +86,7 @@ func (s *Service) SyncIdentityLogs(ctx context.Context, tenantID string) (Identi
 	findings := identitythreat.Findings(identitythreat.Detect(events, identitythreat.Config{}))
 	findings = l15.Enrich(findings) // §11 parity with POST /v1/identity/events
 	for i := range findings {
-		findings[i].ID = s.NewID()
+		findings[i].ID = eventFindingID("idt", findings[i])
 		if err := s.Store.PutFinding(ctx, tenantID, findings[i]); err != nil {
 			slog.Warn("[scan] identity-threat finding could not be stored", "tenant", tenantID, "rule", findings[i].RuleID, "err", err.Error())
 			continue

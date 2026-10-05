@@ -21,6 +21,7 @@ import (
 // those live there. An unparseable record is dropped and counted by the caller, never guessed at.
 func FromCloudTrail(raw []byte) (Event, bool) {
 	var rec struct {
+		EventID      string          `json:"eventID"`
 		EventName    string          `json:"eventName"`
 		EventSource  string          `json:"eventSource"`
 		AWSRegion    string          `json:"awsRegion"`
@@ -35,7 +36,7 @@ func FromCloudTrail(raw []byte) (Event, bool) {
 	if err := json.Unmarshal(raw, &rec); err != nil || strings.TrimSpace(rec.EventName) == "" {
 		return Event{}, false
 	}
-	ev := Event{Provider: "aws", EventName: rec.EventName, SourceIP: rec.SourceIP, Region: rec.AWSRegion}
+	ev := Event{Provider: "aws", EventName: rec.EventName, SourceIP: rec.SourceIP, Region: rec.AWSRegion, ID: rec.EventID}
 
 	var ui struct {
 		Type     string `json:"type"`

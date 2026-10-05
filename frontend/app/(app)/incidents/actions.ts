@@ -10,3 +10,16 @@ export async function acknowledgeIncident(id: string): Promise<void> {
   await api.ackIncident(id, me?.email);
   revalidatePath("/incidents");
 }
+
+// Close an incident with the reason. The closer is the signed-in person (the server reads the session);
+// an EVENT incident (a login, a spray, a trail stopped) can only be closed this way — a later scan not
+// seeing the event again is not evidence anyone dealt with it.
+export async function resolveIncident(id: string, reason: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await api.resolveIncident(id, reason);
+    revalidatePath("/incidents");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "could not close the incident" };
+  }
+}
