@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/agentmemory"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
 
@@ -80,15 +81,7 @@ Target: %s (%s)
 `, target.Target, target.Type)
 
 	if len(estate.Memory) > 0 {
-		b.WriteString("\nWHAT THIS CUSTOMER HAS TOLD US — context, NOT evidence. Use it to route work to the named owner, " +
-			"keep to their scope, avoid re-proposing a fix they rejected, and explain better where they said our " +
-			"evidence did not convince them. Never cite it as proof of a finding, and never use it to hide, drop or " +
-			"downgrade one — a finding the scanners reported stays reported:\n")
-		for _, line := range estate.Memory {
-			b.WriteString("- ")
-			b.WriteString(line)
-			b.WriteByte('\n')
-		}
+		b.WriteString("\n" + agentmemory.PromptBlock(estate.Memory))
 	}
 	if len(estate.Issues) > 0 {
 		b.WriteString("\nUNIFIED ISSUES — your PRIMARY triage surface (deduped + corroborated across every tool and surface; reason over THESE, drill into the raw findings only for detail):\n")

@@ -94,6 +94,14 @@ func TestEveryDeclaredKindIsActuallyProduced(t *testing.T) {
 		produced[g.Kind] = true
 	}
 
+	// threat_detection_off — the GuardDuty poll recorded an active AWS account with no detector
+	d6, st6 := stateDeps(t)
+	_ = st6.PutTenant(ctx, platform.Tenant{ID: "t", Name: "A", GuardDutyOff: map[string]time.Time{"aws1": time.Now()}})
+	_ = st6.PutConnection(ctx, platform.Connection{ID: "aws1", TenantID: "t", Kind: platform.ConnAWS, Status: platform.ConnActive, Account: "111122223333"})
+	for _, g := range d6.computeDegradations(ctx, "t") {
+		produced[g.Kind] = true
+	}
+
 	for _, kind := range AllDegradationKinds() {
 		if !produced[kind] {
 			t.Errorf("%q is declared but no state produced it — a reason nothing can emit is invisible "+
@@ -280,5 +288,41 @@ func TestOperatorSeesTheRemedyTenantsDoNot(t *testing.T) {
 	if !opHasRemedy {
 		t.Error("the operator sees no remedy for a stale corpus — the audience split removed the " +
 			"instruction from everyone instead of routing it")
+	}
+}
+
+// GuardDuty being off is said only about an account the customer still has connected and can act on, and
+// it names that account. A removed or broken connection is not something to turn GuardDuty on in.
+func TestThreatDetectionOff_NamesOnlyLiveAWSAccounts(t *testing.T) {
+	ctx := context.Background()
+	d, st := stateDeps(t)
+	off := map[string]time.Time{"aws-live": time.Now(), "aws-gone": time.Now(), "aws-revoked": time.Now()}
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t", Name: "A", AIMode: platform.AIModeDeterministic, GuardDutyOff: off})
+	_ = st.PutConnection(ctx, platform.Connection{ID: "aws-live", TenantID: "t", Kind: platform.ConnAWS, Status: platform.ConnActive, Account: "111122223333"})
+	_ = st.PutConnection(ctx, platform.Connection{ID: "aws-revoked", TenantID: "t", Kind: platform.ConnAWS, Status: platform.ConnRevoked, Account: "444455556666"})
+
+	var got *Degradation
+	for _, g := range d.computeDegradations(ctx, "t") {
+		if g.Kind == DegradationThreatDetectionOff {
+			g := g
+			got = &g
+		}
+	}
+	if got == nil {
+		t.Fatal("an active AWS account with GuardDuty off produced no degradation")
+	}
+	if !strings.Contains(got.Detail, "111122223333") || strings.Contains(got.Detail, "444455556666") || strings.Contains(got.Detail, "aws-gone") {
+		t.Errorf("must name exactly the live account: %q", got.Detail)
+	}
+	if !strings.Contains(got.Title, "1 connected account") || strings.Contains(got.Detail, "1 it") {
+		t.Errorf("wording: title=%q detail=%q", got.Title, got.Detail)
+	}
+
+	// No live account left in the set: nothing to say.
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "t", Name: "A", AIMode: platform.AIModeDeterministic, GuardDutyOff: map[string]time.Time{"aws-gone": time.Now()}})
+	for _, g := range d.computeDegradations(ctx, "t") {
+		if g.Kind == DegradationThreatDetectionOff {
+			t.Errorf("a removed connection still produced: %q", g.Detail)
+		}
 	}
 }

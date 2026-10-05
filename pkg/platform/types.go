@@ -151,6 +151,12 @@ type Tenant struct {
 	// GuardDutyCursors is, per AWS connection id, the newest GuardDuty finding update read — the same
 	// cursor discipline as CloudEventCursors.
 	GuardDutyCursors map[string]time.Time `json:"guardduty_cursors,omitempty"`
+	// GuardDutyOff is, per AWS connection id, when a read last found NO GuardDuty detector in the
+	// connection's region. That is not a clean account: nothing is watching it for credential misuse or
+	// crypto-mining, so a quiet incident queue for it means nothing. Set on a not-enabled read, cleared by
+	// the next successful one, and surfaced in the degradation bar — the result was previously returned to
+	// the poller and dropped, so the customer read silence as safety.
+	GuardDutyOff map[string]time.Time `json:"guardduty_off,omitempty"`
 	// AutonomyGrants are the (finding class, remediation type) pairs the OWNER has let apply without a
 	// per-action approval, because this tenant's own record shows that fix closing that class every time
 	// it was tried (internal/autonomy). Earned, not configured: a grant can only be made while the record
