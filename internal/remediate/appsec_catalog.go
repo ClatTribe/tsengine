@@ -13,7 +13,7 @@ import (
 // live suspend). Everything else fell to the `default:` branch — a ticket titled "review <finding>"
 // carrying nothing but the finding's own description. So five of eight asset types had no fix path,
 // and the two where the product is STRONGEST offensively were among them: the AI Pentester proves an
-// SQLi by exploiting it (XBOW 85.6%, above published SOTA), hands the proven finding to
+// SQLi by exploiting it (XBOW: 78/104 first attempt, 89/104 with retries), hands the proven finding to
 // remediate.Propose, and the proposal is "review this". The best evidence in the product met the
 // weakest response, which is the shape ADR 0024 exists to police pointed at Respond instead of Detect.
 //

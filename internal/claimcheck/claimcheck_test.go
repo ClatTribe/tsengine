@@ -155,3 +155,43 @@ func nearby(body string, at int, want string, win int) bool {
 	}
 	return strings.Contains(body[lo:hi], want)
 }
+
+// The retry figure must never stand alone. 85.6% is 89/104 ALLOWING RETRIES; quoted on its own it reads
+// as a single-attempt rate, and it was — including as "85.6%, above published SOTA" against MAPTA's
+// 76.9%, a comparison that only holds if MAPTA also allowed retries, which nobody checked. On the first
+// attempt we score 78/104 (75.0%), which would sit BELOW that. So every occurrence must carry the
+// first-attempt figure within the same passage.
+func TestClaims_XBOWRetryFigureNeverStandsAlone(t *testing.T) {
+	docs := readDocs(t)
+	seen := 0
+	for name, body := range docs {
+		for _, at := range indexAll(body, "85.6") {
+			seen++
+			if nearby(body, at, "78/104", claimWindow) || nearby(body, at, "78 of 104", claimWindow) {
+				continue
+			}
+			t.Errorf("%s quotes the XBOW retry figure 85.6 without the first-attempt 78/104 nearby. "+
+				"Quote both: \"78/104 first attempt, 89/104 (85.6%%) with retries\".", name)
+		}
+	}
+	// A pattern that matches nothing passes vacuously (§14.2 rule 6). The ADR is the claim's home, so
+	// the figure must appear at least there.
+	if seen == 0 {
+		t.Fatal("85.6 appears in no scanned document: this guard is checking nothing")
+	}
+}
+
+// A ranking needs a like-for-like comparison. MAPTA's attempt basis is unchecked, so "above SOTA" is
+// an assertion we cannot support — and on our first-attempt figure it would be false.
+func TestClaims_NoUncheckedStateOfTheArtRanking(t *testing.T) {
+	banned := []string{"above sota", "above published sota", "we are above it", "85.6% > mapta"}
+	for name, body := range readDocs(t) {
+		low := strings.ToLower(body)
+		for _, b := range banned {
+			if strings.Contains(low, b) {
+				t.Errorf("%s claims %q. MAPTA's attempt basis is unchecked, so no ranking against it may "+
+					"be stated; quote both of our figures and say the comparison is unchecked.", name, b)
+			}
+		}
+	}
+}

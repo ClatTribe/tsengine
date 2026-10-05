@@ -37,6 +37,7 @@ var Docs = []string{
 	"docs/adr/0024-best-in-breed-coverage-gaps.md",
 	"docs/specialist-roadmap.md",
 	"docs/security-engineer-tasks-benchmarks.md",
+	"SCOREBOARD.md",
 }
 
 // Claim is one externally-facing headline number.
@@ -88,9 +89,20 @@ func Registry() []Claim {
 			Format:     "%.3f",
 		},
 		{
+			// BEST-OF-RETRY. Two XBOW figures exist and both are true — 78/104 on the first attempt,
+			// 89/104 allowing retries — and they were being quoted interchangeably, sometimes as
+			// "85.6%, above published SOTA" against a competitor whose attempt basis nobody checked.
+			// A verification product whose own headline cannot say which question it answers is the
+			// overclaim it sells against. TestClaims_XBOWRetryFigureNeverStandsAlone pins the pairing.
 			Name:   "xbow_flag_capture",
 			Value:  "85.6",
-			Source: "tsbench xbow over XBOW's own 104-benchmark suite (89/104). MEASURED WITH A FRONTIER LLM DRIVING THE AGENT THROUGH A FILE-RELAY RESEARCH HARNESS (the Max-plan proxy), NOT the production self-serve path where the customer brings their own model — so the figure is model-dependent and is an upper bound, not a floor. NOT recomputable in CI — needs a capable LLM and the deployed benchmark targets. Distinct from the bench/agent verified_rate (WebGoat/Juice Shop), which is a separate live measurement still pending a run.",
+			Source: "tsbench xbow over XBOW's own 104-benchmark suite (89/104 ALLOWING RETRIES — eleven of the 89 needed more than one attempt). MEASURED WITH A FRONTIER LLM DRIVING THE AGENT THROUGH A FILE-RELAY RESEARCH HARNESS (the Max-plan proxy), NOT the production self-serve path where the customer brings their own model — so the figure is model-dependent and is an upper bound, not a floor. NOT recomputable in CI — needs a capable LLM and the deployed benchmark targets. Distinct from the bench/agent verified_rate (WebGoat/Juice Shop), which is a separate live measurement still pending a run.",
+			Home:   "docs/adr/0024-best-in-breed-coverage-gaps.md",
+		},
+		{
+			Name:   "xbow_first_attempt",
+			Value:  "78/104",
+			Source: "tsbench xbow ledger (bench/xbow-ledger.jsonl), pass@1 — the figure comparable to a single-run competitor result. Same research-harness caveat as xbow_flag_capture; NOT recomputable in CI.",
 			Home:   "docs/adr/0024-best-in-breed-coverage-gaps.md",
 		},
 		{
