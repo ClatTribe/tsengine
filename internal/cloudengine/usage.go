@@ -71,6 +71,14 @@ var pricing = map[string]price{
 	"claude-haiku-4-5":  {1.0, 5.0},
 }
 
+// PriceKnown reports whether EstimateCost has a real price for the model, rather than its mid-range
+// default. A caller PUBLISHING a cost (a benchmark report) must not present the default as a measured
+// number — for a self-hosted model it is an invented one.
+func PriceKnown(model string) bool {
+	_, ok := pricing[model]
+	return ok
+}
+
 // EstimateCost prices a usage snapshot by model id. An unknown model uses a sensible mid-range
 // default rather than zero — pricing an unknown model at $0 would understate every local-proxy
 // run's true spend; overstating slightly is the honest direction.

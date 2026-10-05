@@ -180,3 +180,33 @@ func TestLoad_RefusesBadCases(t *testing.T) {
 		t.Fatal("a case with no answer key must fail the load, not be skipped")
 	}
 }
+
+// "Shown a fixed file" separates never-looked from looked-and-missed; a reviewer that did not report
+// what it examined is UNKNOWN, never "no".
+func TestScoreAll_ExaminedSeparatesCoverageFromDetection(t *testing.T) {
+	p := Predictions{Tool: "x", Ran: map[string]bool{"A": true, "B": true, "C": true},
+		Examined: map[string][]string{"A": {"src/a.ts", "src/z.ts"}, "B": {"pkg/other.go"}}}
+	s := ScoreAll(corpus(), p, DefaultTolerance, "")
+	if s.ExaminedKnown != 2 || s.KeyExamined != 1 {
+		t.Fatalf("examined counts: known %d key %d", s.ExaminedKnown, s.KeyExamined)
+	}
+	for _, r := range s.PerCase {
+		switch r.ID {
+		case "A":
+			if r.ExaminedKey == nil || !*r.ExaminedKey {
+				t.Error("A was shown its fixed file")
+			}
+		case "B":
+			if r.ExaminedKey == nil || *r.ExaminedKey {
+				t.Error("B was not shown its fixed file")
+			}
+		case "C":
+			if r.ExaminedKey != nil {
+				t.Error("C reported nothing — unknown, not no")
+			}
+		}
+	}
+	if !strings.Contains(Render(s), "SHOWN a fixed file") {
+		t.Error("the report must state the coverage number")
+	}
+}

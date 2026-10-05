@@ -133,6 +133,7 @@ func codereviewRun(argv []string) error {
 	out := fs.String("out", "codereview-predictions.json", "predictions file to write")
 	maxTasks := fs.Int("max-tasks", 60, "codesweep: cap on focused questions per case")
 	only := fs.String("only", "", "comma-separated case ids to run (default: all)")
+	localizer := fs.String("localizer", "llm", "how codesweep picks files to ask about: llm (what the product runs) or heuristic (free, deterministic — weaker, and reported as such)")
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -164,11 +165,55 @@ func codereviewRun(argv []string) error {
 	if mn, ok := llm.(cloudengine.ModelNamer); ok {
 		model = mn.ModelName()
 	}
-	preds := codereviewbench.Predictions{Tool: "codesweep", Model: model,
+	tool := "codesweep"
+	var loc codelocalize.Localizer = codelocalize.LLMLocalizer{LLM: llm}
+	switch *localizer {
+	case "llm":
+	case "heuristic":
+		tool = "codesweep(heuristic-plan)" // a different configuration must never be scored under the product's name
+		loc = codelocalize.HeuristicLocalizer{}
+	default:
+		return fmt.Errorf("--localizer must be llm or heuristic")
+	}
+	preds := codereviewbench.Predictions{Tool: tool, Model: model,
 		Cases: map[string][]codereviewbench.Prediction{}, Ran: map[string]bool{}, Errors: map[string]string{}}
+	// RESUME: a previous run's results for the same configuration are kept, and the cases it finished are
+	// skipped. A run is hours on a local model; losing it to a timeout at case 4 of 5 is the failure this
+	// prevents (it happened).
+	if raw, rerr := os.ReadFile(*out); rerr == nil {
+		var prev codereviewbench.Predictions
+		if json.Unmarshal(raw, &prev) == nil && prev.Tool == tool && prev.Model == model {
+			preds = prev
+			if preds.Cases == nil {
+				preds.Cases = map[string][]codereviewbench.Prediction{}
+			}
+			if preds.Ran == nil {
+				preds.Ran = map[string]bool{}
+			}
+			if preds.Errors == nil {
+				preds.Errors = map[string]string{}
+			}
+		}
+	}
+	save := func() error {
+		if ur, ok := llm.(cloudengine.UsageReporter); ok {
+			// Only a model with a published price yields a cost. EstimateCost's default rate is right for a
+			// budget (overstating is the safe direction there) and wrong for a published number: a local
+			// model priced at a frontier rate is an invented cost.
+			if u := ur.TotalUsage(); u.Total() > 0 && cloudengine.PriceKnown(model) {
+				preds.CostUSD, preds.CostKnown = preds.CostUSD+cloudengine.EstimateCost(model, u), true
+			}
+		}
+		b, _ := json.MarshalIndent(preds, "", "  ")
+		return os.WriteFile(*out, b, 0o644)
+	}
 	ctx := context.Background()
 	for _, c := range cases {
 		if len(want) > 0 && !want[c.ID] {
+			continue
+		}
+		if preds.Ran[c.ID] {
+			fmt.Printf("DONE    %s (from an earlier run)\n", c.ID)
 			continue
 		}
 		dir := filepath.Join(*work, c.ID)
@@ -182,7 +227,7 @@ func codereviewRun(argv []string) error {
 			preds.Errors[c.ID] = "load: " + err.Error()
 			continue
 		}
-		tasks, err := codesweep.Plan(ctx, codelocalize.LLMLocalizer{LLM: llm}, repo, codesweep.PlanOptions{MaxTasks: *maxTasks})
+		tasks, err := codesweep.Plan(ctx, loc, repo, codesweep.PlanOptions{MaxTasks: *maxTasks})
 		if err != nil {
 			preds.Errors[c.ID] = "plan: " + err.Error()
 			continue
@@ -191,6 +236,16 @@ func codereviewRun(argv []string) error {
 		if err != nil {
 			preds.Errors[c.ID] = "sweep: " + err.Error()
 			continue
+		}
+		if preds.Examined == nil {
+			preds.Examined = map[string][]string{}
+		}
+		seenPath := map[string]bool{}
+		for _, tk := range tasks {
+			if !seenPath[tk.Path] {
+				seenPath[tk.Path] = true
+				preds.Examined[c.ID] = append(preds.Examined[c.ID], tk.Path)
+			}
 		}
 		var ps []codereviewbench.Prediction
 		for _, cand := range res.Candidates {
@@ -206,15 +261,13 @@ func codereviewRun(argv []string) error {
 		}
 		preds.Cases[c.ID] = ps
 		preds.Ran[c.ID] = true
+		delete(preds.Errors, c.ID)
 		fmt.Printf("RAN     %s — %d tasks planned, %d ran, %d candidate locations\n", c.ID, res.Planned, res.Ran, len(ps))
-	}
-	if ur, ok := llm.(cloudengine.UsageReporter); ok {
-		if u := ur.TotalUsage(); u.Total() > 0 {
-			preds.CostUSD, preds.CostKnown = cloudengine.EstimateCost(model, u), true
+		if err := os.WriteFile(*out, mustIndent(preds), 0o644); err != nil { // after EVERY case
+			return err
 		}
 	}
-	b, _ := json.MarshalIndent(preds, "", "  ")
-	if err := os.WriteFile(*out, b, 0o644); err != nil {
+	if err := save(); err != nil {
 		return err
 	}
 	fmt.Printf("\nwrote %s — grade it with `tsbench codereview score --predictions %s`\n", *out, *out)
@@ -243,6 +296,11 @@ func checkout(ctx context.Context, c codereviewbench.Case, dir string) error {
 		}
 	}
 	return nil
+}
+
+func mustIndent(v any) []byte {
+	b, _ := json.MarshalIndent(v, "", "  ")
+	return b
 }
 
 var locRe = regexp.MustCompile(`^(.+?):(\d+)`)
