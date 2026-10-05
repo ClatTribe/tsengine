@@ -169,3 +169,33 @@ func TestCallTool_NoChokePointSaysSeparateWork(t *testing.T) {
 		t.Errorf("no-leverage case does not say the paths are separate work: %q", out)
 	}
 }
+
+// verify_fix POSTs the proposed patch to /v1/findings/{id}/verify-fix and renders the verdict. A
+// BLOCKING verdict must lead with "DO NOT OPEN THIS PR" so the agent cannot read a failure as a pass.
+func TestCallTool_VerifyFixRendersBlockingVerdict(t *testing.T) {
+	s := fakeEngine(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.Contains(r.URL.Path, "/verify-fix") {
+			t.Errorf("wrong request: %s %s", r.Method, r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"path":"app/db.go","soundness":{"blocking":true,"note":"soundness not closure",` +
+			`"checks":[{"name":"non_trivial","status":"fail","message":"the patch changes nothing"}]}}`))
+	})
+	out, err := s.callTool("verify_fix", map[string]any{"finding_id": "f-1", "patched": "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "DO NOT OPEN THIS PR") {
+		t.Errorf("a blocking verdict must warn loudly, got: %q", out)
+	}
+	if !strings.Contains(out, "soundness not closure") {
+		t.Errorf("the scope note must ride along, got: %q", out)
+	}
+}
+
+// verify_fix requires both the finding id and the proposed content.
+func TestCallTool_VerifyFixNeedsArgs(t *testing.T) {
+	s := &server{base: "http://unused", token: "tok"}
+	if _, err := s.callTool("verify_fix", map[string]any{"finding_id": "f-1"}); err == nil {
+		t.Error("verify_fix with no patched content should error")
+	}
+}

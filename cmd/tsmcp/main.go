@@ -17,12 +17,18 @@
 // conversational agent write to a customer's repository with no desk, no approval and no ledger entry
 // in between. The HITL gates live in the platform; a side door that bypasses them is not a feature.
 //
+// ONE tool POSTs — verify_fix — and it is still read-only in the sense that matters: it takes no
+// action on the customer's systems. It returns a verdict (is this proposed patch sound?) over content
+// the agent supplied; it opens no PR, files no ticket, and attacks nothing. The POST carries a body,
+// not a mutation. The read-only line above is about side effects, not HTTP verbs.
+//
 // Transport is stdio JSON-RPC 2.0 — the MCP default — implemented directly. It is a read loop and
 // encoding/json; a dependency for that would be more code to audit than the thing it replaces.
 package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -186,6 +192,20 @@ func toolSchemas() []map[string]any {
 				"pattern match to confirm before acting).",
 			"inputSchema": obj(map[string]any{}),
 		},
+		{
+			"name": "verify_fix",
+			"description": "Before you open a PR, check whether a fix you wrote for a KNOWN finding is SOUND: " +
+				"it actually changes the file, it changes the line the finding cites (not some other line), and " +
+				"it still parses. Pass the finding id and your proposed NEW file content. This takes no action — " +
+				"it opens no PR and attacks nothing, it just returns a verdict. It proves the patch is SOUND, " +
+				"NOT that the vulnerability is closed: closure is only confirmed after the fix is deployed and the " +
+				"scan + exploit are re-run. A clean result is not permission to skip review.",
+			"inputSchema": obj(map[string]any{
+				"finding_id": str("the finding this fix addresses, e.g. f-123"),
+				"patched":    str("your proposed NEW content for the cited file (whole file)"),
+				"original":   str("optional: the current content of the file, if the engine cannot read it from a connected repo"),
+			}, "finding_id", "patched"),
+		},
 	}
 }
 
@@ -282,6 +302,42 @@ func (s *server) callTool(name string, args map[string]any) (string, error) {
 			fmt.Fprintf(&b, "- [%s] %s (%s) — %s\n", is.Severity, is.Title, conf, is.Endpoint)
 		}
 		return b.String(), nil
+
+	case "verify_fix":
+		id, patched := arg("finding_id"), arg("patched")
+		if id == "" || patched == "" {
+			return "", fmt.Errorf("verify_fix needs a finding_id and the proposed patched file content")
+		}
+		reqBody := map[string]string{"patched": patched}
+		if o := arg("original"); o != "" {
+			reqBody["original"] = o
+		}
+		var out struct {
+			Path      string `json:"path"`
+			Soundness struct {
+				Blocking bool   `json:"blocking"`
+				Note     string `json:"note"`
+				Checks   []struct {
+					Name    string `json:"name"`
+					Status  string `json:"status"`
+					Message string `json:"message"`
+				} `json:"checks"`
+			} `json:"soundness"`
+		}
+		if err := s.post("/v1/findings/"+url.PathEscape(id)+"/verify-fix", reqBody, &out); err != nil {
+			return "", err
+		}
+		var b strings.Builder
+		if out.Soundness.Blocking {
+			fmt.Fprintf(&b, "DO NOT OPEN THIS PR YET — the fix for %s (%s) failed a soundness check:\n", id, out.Path)
+		} else {
+			fmt.Fprintf(&b, "The fix for %s (%s) is sound:\n", id, out.Path)
+		}
+		for _, c := range out.Soundness.Checks {
+			fmt.Fprintf(&b, "- [%s] %s\n", c.Status, c.Message)
+		}
+		b.WriteString(out.Soundness.Note)
+		return b.String(), nil
 	}
 	return "", fmt.Errorf("unknown tool %q", name)
 }
@@ -306,4 +362,34 @@ func (s *server) get(path string, into any) error {
 		return fmt.Errorf("security engine returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return json.Unmarshal(body, into)
+}
+
+// post calls the platform API with a JSON body. It is used ONLY by verify_fix, which takes no action
+// on the customer's systems — it returns a verdict over content the agent supplied. The POST carries a
+// body; it does not mutate anything. This server never exposes a tool that writes (opens a PR, files a
+// ticket, suppresses a finding): those bypass the HITL desk and belong in the platform, never a chat.
+func (s *server) post(path string, body any, into any) error {
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, s.base+path, bytes.NewReader(buf))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("could not reach the security engine at %s: %w", s.base, err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("the security engine rejected this token (%d) — check TSENGINE_TOKEN", resp.StatusCode)
+	}
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("security engine returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+	return json.Unmarshal(respBody, into)
 }

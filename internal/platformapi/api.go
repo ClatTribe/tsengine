@@ -446,6 +446,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/l2/translate", d.auth(d.handleL2Translate))                    // L2 Lead → developer/founder-facing consultant deliverable (LLM-gated)
 	mux.HandleFunc("GET /v1/findings/{id}/localize", d.auth(d.handleLocalize))              // T2 "where is the fix?" — the SAME localizer the agent uses, exposed to a human
 	mux.HandleFunc("POST /v1/findings/{id}/autofix", d.auth(d.handleAutofix))               // AI autofix — LLM-generated code patch for a finding (LLM-gated)
+	mux.HandleFunc("POST /v1/findings/{id}/verify-fix", d.auth(d.handleVerifyFix))         // is a proposed fix SOUND (non-trivial, aimed at the cited line, parses)? No side effects — read-only verdict
 	mux.HandleFunc("POST /v1/issues/investigate", d.auth(d.handleIssueInvestigate))         // AI per-issue investigation (key in body — keys contain '/') — chain + blast radius (always) + root-cause/fix narrative (LLM-gated)
 	mux.HandleFunc("GET /v1/ai-analyses", d.auth(d.handleListAIAnalyses))                   // persisted AI Security Engineer analyses (Triage/Investigate) — a run survives navigation; ?kind= filter
 	mux.HandleFunc("POST /v1/apiauthz/discover", d.auth(d.handleAuthzDiscover))             // API BOLA/BFLA discovery — LLM proposes candidate authz tests (LLM-gated)

@@ -791,6 +791,27 @@ The L2 path doesn't get a separate codepath â `dispatch_l2_probe` is a thin
 
 ---
 
+### 9.1 The coding-agent MCP surface (`cmd/tsmcp`) — and `verify_fix`
+
+`cmd/tsmcp` exposes the engine's knowledge to a CODING AGENT (Claude Code, Cursor) over MCP, so the
+developer fixing a vulnerability can reach the engine without alt-tabbing to a dashboard. It is
+READ-ONLY in the sense that matters — it takes **no action on the customer's systems**: it opens no
+PR, files no ticket, suppresses no finding. A write tool reachable from a chat would bypass the HITL
+desk (a code-fix action auto-applies at tier 1), so those stay in the platform. The catalogue is kept
+SMALL (the ≤12-tool reasoning, §2.6), guarded by `TestTools_CatalogueStaysSmall`.
+
+**`verify_fix` is the "verification engineering, sold to another agent" tool** (Rauch's thesis). Before
+the coding agent opens a PR, it asks whether the fix it wrote for a KNOWN finding is SOUND: `POST
+/v1/findings/{id}/verify-fix` runs `internal/fixcheck` over the proposed new file content (non-trivial,
+changes the cited line, parses) and returns the verdict. It is the ONE tool that POSTs, and it is still
+read-only by the test that counts: it computes over content the agent supplied and takes no action — the
+POST carries a body, not a mutation. **It NEVER says "this change is safe" or "the vulnerability is
+closed"**: soundness is not closure (closure needs the runtime + the exploit, verified post-deploy by
+[[internal/retest]]), and a verify tool returning "safe" on a clean check would be the false confidence
+§0 forbids, sold to another agent. A blocking verdict leads with "DO NOT OPEN THIS PR". Ownership/consent
+are not required because nothing is fired at any target — unlike the re-attack path, which is active
+exploitation and IS ownership- and consent-gated.
+
 ## 10. Evidence grounding (the LLM determines issues; tools back every claim)
 
 > **Process-reproducibility is NOT an invariant here â it was removed.** The old
