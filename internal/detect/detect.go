@@ -148,6 +148,14 @@ func (d *Detector) ReconcileScoped(ctx context.Context, tenantID string, current
 	// state (a full scan pass). Event-driven ingests use OpenFor (open-only) instead, so they never
 	// falsely resolve a scan incident whose key they don't carry.
 	for key, inc := range openByKey {
+		// An EVENT is not a condition. A root console login, a password spray or a trail being stopped
+		// HAPPENED; it does not stop being true because it did not happen again, so its absence from a
+		// later read is not evidence it was dealt with. Resolving it by absence closed such incidents a
+		// day after they opened, reading as "fixed" to whoever looked next. Only a person closes one
+		// (POST /v1/incidents/{id}/resolve). Checked before coverage so no caller can widen it away.
+		if IsEventProducer(ProducerOf(inc.RuleID)) {
+			continue
+		}
 		if !cov.Covers(inc.RuleID) {
 			// Nothing this pass ran could have re-observed this producer, so its silence carries no
 			// information. Leave the incident exactly as it is — status, streak and all.

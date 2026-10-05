@@ -42,6 +42,7 @@ type CloudEventResult struct {
 // cursor advances only past events actually read; a truncated read names the span it left unread.
 // `ran` is true only when at least one account was read.
 func (s *Service) SyncCloudEvents(ctx context.Context, tenantID string) (CloudEventResult, bool) {
+	defer lockEvents(tenantID)()
 	res := CloudEventResult{Findings: []types.Finding{}, Threats: []cloudcdr.Threat{}, Failed: map[string]string{}, Unread: map[string]string{}}
 	if s.Store == nil || s.NewID == nil || s.CloudEventReader == nil {
 		return res, false
@@ -96,7 +97,7 @@ func (s *Service) SyncCloudEvents(ctx context.Context, tenantID string) (CloudEv
 	res.Threats = cloudcdr.Detect(events)
 	findings := l15.Enrich(cloudcdr.Findings(res.Threats)) // §11 parity with POST /v1/cloud/events
 	for i := range findings {
-		findings[i].ID = s.NewID()
+		findings[i].ID = eventFindingID("cdr", findings[i])
 		if err := s.Store.PutFinding(ctx, tenantID, findings[i]); err != nil {
 			slog.Warn("[scan] cloud CDR finding could not be stored", "tenant", tenantID, "rule", findings[i].RuleID, "err", err.Error())
 			continue

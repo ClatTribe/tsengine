@@ -97,6 +97,8 @@ export const api = {
   // Take ownership of an open incident → stops the timed auto-escalation (the MDR "I'm on it").
   ackIncident: (id: string, by?: string) =>
     call<Incident>(`/v1/incidents/${id}/ack`, { method: "POST", body: JSON.stringify({ by: by ?? "" }) }),
+  resolveIncident: (id: string, reason: string) =>
+    call<Incident>(`/v1/incidents/${id}/resolve`, { method: "POST", body: JSON.stringify({ reason }) }),
   attackPaths: () => safe<AttackPaths>("/v1/attack-paths", { attack_paths: [], count: 0 }),
 
   // Risk register (vCISO artifact) — list + board summary; seed candidates from findings (grounded);

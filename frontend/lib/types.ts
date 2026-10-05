@@ -748,6 +748,10 @@ export interface Incident {
   // WAVSEP: dalfox found 7 cases in one run and 9 in the next on an unchanged target, succeeding
   // both times, so no failure signal fired).
   absent_passes?: number;
+  // A person closed it (POST /v1/incidents/{id}/resolve). Empty on a resolved incident = a scan closed it
+  // because its issue stopped appearing, which is a different claim.
+  resolved_by?: string;
+  resolution_note?: string;
   // Who answers for it, stamped from the asset when the incident opened. asset_id absent = the finding was
   // not tied to an asset (unknown, NOT unowned); asset_id with no owner/team = an unowned asset.
   asset_id?: string;

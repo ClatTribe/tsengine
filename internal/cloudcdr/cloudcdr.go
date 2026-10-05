@@ -27,6 +27,9 @@ type Event struct {
 	SourceIP  string `json:"source_ip"`
 	Region    string `json:"region"`
 	Detail    string `json:"detail"` // request-parameters summary / free text
+	// ID is the provider's own event id (CloudTrail eventID) when known — what makes a re-read of an
+	// overlapping window recognise an event it has already reported.
+	ID string `json:"id,omitempty"`
 }
 
 // Threat is a detected risky cloud action.
@@ -125,6 +128,9 @@ func Findings(threats []Threat) []types.Finding {
 			RuleID: "cloudcdr::" + t.Rule, Tool: "cloudcdr",
 			Severity: t.Severity, Endpoint: "cloud:" + nz(t.Event.Resource, t.Event.EventName), Title: t.Title,
 			Description: describe(t),
+		}
+		if t.Event.ID != "" {
+			f.ToolArgs = map[string]string{"event_id": t.Event.ID}
 		}
 		if m.cwe != "" {
 			f.CWE = []string{m.cwe}

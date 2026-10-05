@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
+	"github.com/ClatTribe/tsengine/internal/connector/awsfetch"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -133,5 +134,27 @@ func TestOnDemandRescanStillWorksWithoutTheEntitlement(t *testing.T) {
 	}
 	if n != 1 || sc.scans != 1 {
 		t.Fatalf("a Free tenant lost on-demand scanning, which it is sold: n=%d scans=%d", n, sc.scans)
+	}
+}
+
+// The fast event poll is part of continuous monitoring, a paid capability: a Free tenant's logs are not
+// polled. A zero interval disables the loop without error.
+func TestEventPoller_SkipsUnentitledTenants(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutTenant(ctx, platform.Tenant{ID: "free", Plan: platform.PlanFree})
+	read := 0
+	svc := &runner.Service{Store: st, NewID: func() string { return "x" },
+		CloudEventReader: func(platform.Connection) awsfetch.EventReader { read++; return nil }}
+	_ = st.PutConnection(ctx, platform.Connection{ID: "c", TenantID: "free", Kind: platform.ConnAWS, Status: platform.ConnActive})
+	p := &EventPoller{Store: st, Runner: svc, Interval: time.Minute}
+	if _, err := p.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if read != 0 {
+		t.Error("a Free tenant's CloudTrail was polled")
+	}
+	if err := (&EventPoller{Interval: 0}).Run(ctx); err != nil {
+		t.Errorf("a zero interval must disable the poller cleanly: %v", err)
 	}
 }

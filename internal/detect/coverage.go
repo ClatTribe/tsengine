@@ -112,3 +112,19 @@ func ProducerOf(ruleIDOrKey string) string {
 }
 
 func normalizeProducer(p string) string { return strings.ToLower(strings.TrimSpace(p)) }
+
+// eventProducers emit findings about something that HAPPENED (a log event), not a state a later scan can
+// re-observe. Their incidents are never resolved by absence; a person closes them.
+var eventProducers = map[string]bool{"cloudcdr": true, "identitythreat": true, "guardduty": true}
+
+// IsEventProducer reports whether a producer's findings describe events rather than conditions.
+func IsEventProducer(producer string) bool { return eventProducers[normalizeProducer(producer)] }
+
+// EventProducers lists them, for guards that hold mirrors (the incidents page) to this set.
+func EventProducers() []string {
+	out := make([]string, 0, len(eventProducers))
+	for p := range eventProducers {
+		out = append(out, p)
+	}
+	return out
+}

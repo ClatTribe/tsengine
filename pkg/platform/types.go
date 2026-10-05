@@ -1511,6 +1511,11 @@ type Incident struct {
 	// An acknowledged incident is never auto-escalated. Zero = unacknowledged.
 	AcknowledgedAt time.Time `json:"acknowledged_at,omitzero"`
 	AcknowledgedBy string    `json:"acknowledged_by,omitempty"`
+	// ResolvedBy/ResolutionNote record a person closing the incident (POST /v1/incidents/{id}/resolve).
+	// Empty ResolvedBy on a resolved incident means a scan closed it because its issue stopped
+	// appearing — a different claim from someone investigating and deciding it is done.
+	ResolvedBy     string `json:"resolved_by,omitempty"`
+	ResolutionNote string `json:"resolution_note,omitempty"`
 	// LastEscalatedAt is when the timed auto-escalation last re-alerted this incident, so it
 	// re-pings at most once per AckWindowMins instead of every monitoring pass.
 	LastEscalatedAt time.Time `json:"last_escalated_at,omitzero"`

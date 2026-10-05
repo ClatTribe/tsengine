@@ -369,7 +369,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/control-plane/detections", d.auth(d.handleIngestControlDetections)) // WAF logs as the control under test (ADR 0027)
 	mux.HandleFunc("POST /v1/scuba/ingest", d.auth(d.handleScubaIngest))                         // correlate a customer ScubaGear run against ours
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
-	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident)) // human takes ownership → stops timed auto-escalation
+	mux.HandleFunc("POST /v1/incidents/{id}/resolve", d.auth(d.handleResolveIncident)) // a person closes it, with the reason (the only way an EVENT incident closes)
+	mux.HandleFunc("POST /v1/incidents/{id}/ack", d.auth(d.handleAckIncident))         // human takes ownership → stops timed auto-escalation
 	// A Detection Skill verdict rendered as compliance evidence (ADR 0017 "Certify"). Read-time, so
 	// the control set always reflects the current CWE crosswalk; unattested until a named human signs.
 	mux.HandleFunc("GET /v1/incidents/{id}/certification", d.auth(d.handleIncidentCertification))

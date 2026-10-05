@@ -770,6 +770,11 @@ func main() {
 	defer stopMonitor()
 	sched := &scheduler.Scheduler{Store: st, Runner: svc, Interval: monitorInterval()}
 	go func() { _ = sched.Run(monitorCtx) }()
+	// The event sources (CloudTrail, identity-provider logs) on their own fast clock, so an incident opens
+	// minutes after the event rather than at the next full pass. TSENGINE_EVENT_POLL_INTERVAL (default
+	// 10m; 0 disables — the full pass still reads them).
+	eventPoller := &scheduler.EventPoller{Store: st, Runner: svc, Interval: eventPollInterval()}
+	go func() { _ = eventPoller.Run(monitorCtx) }()
 
 	// GLOBAL threat-intel auto-refresh: keep the shared KEV/EPSS corpus current on its own (slower)
 	// clock, so "continuously updating" intel doesn't depend on an external ops cron. Disabled unless
@@ -1011,6 +1016,24 @@ func hydrateFileSecrets() {
 		}
 		_ = os.Setenv(key, strings.TrimSpace(string(b)))
 	}
+}
+
+// eventPollInterval is how often the event sources are read between full passes
+// (TSENGINE_EVENT_POLL_INTERVAL, e.g. "5m"). Default 10m; "0" disables the fast poll.
+func eventPollInterval() time.Duration {
+	v := os.Getenv("TSENGINE_EVENT_POLL_INTERVAL")
+	if v == "" {
+		return 10 * time.Minute
+	}
+	if v == "0" {
+		return 0
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d < time.Minute {
+		log.Printf("[events] TSENGINE_EVENT_POLL_INTERVAL=%q is not a duration of at least 1m; using 10m", v)
+		return 10 * time.Minute
+	}
+	return d
 }
 
 // monitorInterval is the continuous re-scan cadence (TSENGINE_MONITOR_INTERVAL, e.g.

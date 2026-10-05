@@ -6,6 +6,7 @@ import type { Incident, SLABreach } from "@/lib/types";
 import { SeverityBadge, Empty } from "@/components/ui/primitives";
 import { PageIntro } from "@/components/ui/page-intro";
 import { AckButton } from "@/components/incidents/ack-button";
+import { ResolveButton } from "@/components/incidents/resolve-button";
 import { SOCScorecard } from "@/components/incidents/soc-scorecard";
 import { timeAgo, duration } from "@/lib/utils";
 
@@ -204,6 +205,14 @@ function Node({ incident: i, resolved, respondPending }: { incident: Incident; r
               therefore rendered as acknowledged — and because AckButton shows the badge INSTEAD of the
               button, the one action in the alert-response path could not be taken. */}
           {!resolved && <AckButton id={i.id} acknowledged={hasTime(i.acknowledged_at)} by={i.acknowledged_by} />}
+          {/* Event incidents (CloudTrail, identity-provider logs) never close on their own — a later scan not
+              seeing the event again proves nothing — so the close action is what ends them. */}
+          {!resolved && <ResolveButton id={i.id} event={isEventIncident(i.rule_id)} />}
+          {resolved && i.resolved_by && (
+            <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted" title={i.resolution_note}>
+              closed by {i.resolved_by}
+            </span>
+          )}
           {/* Ransomware use is a strictly stronger claim than KEV listing — exploited in the wild
               versus exploited by crews who encrypt the estate. It outranks severity for ordering
               work, and the queue showed neither it nor the deadline below. */}
@@ -392,4 +401,10 @@ function BlastRadiusBadge({ blast }: { blast?: { reaches_crown_jewel: boolean; c
       reaches {jewel}
     </span>
   );
+}
+
+// Mirrors detect.IsEventProducer: findings about something that HAPPENED, which no scan can "un-see".
+function isEventIncident(ruleID: string): boolean {
+  const p = ruleID.split("::")[0];
+  return p === "cloudcdr" || p === "identitythreat" || p === "guardduty";
 }
