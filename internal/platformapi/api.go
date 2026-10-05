@@ -39,6 +39,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/ratelimit"
+	"github.com/ClatTribe/tsengine/internal/research"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/scubaingest"
 	"github.com/ClatTribe/tsengine/internal/store"
@@ -147,6 +148,10 @@ type Deps struct {
 	// the deterministic HeuristicSpecGen (today's behaviour). The model widens discovery only; the
 	// deterministic predicate + the RoE Guard still gate every probe, so no LLM false positives.
 	AgentLLM pentest.SpecLLM
+	// ResearchFetch does one bounded, SSRF-screened GET for the research tool (internal/research). Nil →
+	// the default public-only fetcher (safeResearchFetcher). Injected in tests so the handler's
+	// allowlist/selection logic is checked without the network.
+	ResearchFetch research.Fetcher
 	// AgentLLMFactory, when set, builds a FRESH operator client per resolve so each run's usage is read
 	// from a counter no other tenant shares (aimeter.go). AgentLLM stays the "is a model configured" signal
 	// and the fallback when the factory returns nil.
@@ -321,6 +326,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/contacts", d.auth(d.handleListContacts))                                      // on-call escalation roster (names + numbers)
 	mux.HandleFunc("POST /v1/contacts", d.auth(d.handleAddContact))                                       // add a contact
 	mux.HandleFunc("DELETE /v1/contacts/{id}", d.auth(d.handleDeleteContact))                             // remove a contact
+	mux.HandleFunc("POST /v1/research/finding/{id}", d.auth(d.handleResearchFinding))                     // bounded, cited advisory research for one finding (input-to-propose, never evidence)
 	mux.HandleFunc("GET /v1/autonomy", d.auth(d.handleGetAutonomy))                                       // earned autonomy: offers + grants
 	mux.HandleFunc("POST /v1/settings/autonomy", d.auth(d.handleSetAutonomy))                             // owner grants/withdraws earned autonomy for one fix kind
 	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                                     // global kill-switch: halt/resume all agent action

@@ -2224,6 +2224,22 @@ export interface AIValue {
   unmetered: string[];
 }
 
+// Bounded research (POST /v1/research/finding/{id}): cited, pinned reference material — context, never
+// evidence. unavailable = allowed but failed; rejected = refused before any fetch.
+export interface ResearchDocument {
+  url: string;
+  fetched_at: string;
+  sha256: string;
+  title?: string;
+  text: string;
+  truncated: boolean;
+  bytes: number;
+}
+export interface ResearchResult {
+  documents?: ResearchDocument[];
+  unavailable?: { url: string; reason: string }[];
+  rejected?: { url: string; reason: string }[];
+}
 // Earned autonomy (GET /v1/autonomy): which kinds of fix have closed their kind of finding every time,
 // and which the owner has allowed to apply without a per-action approval.
 export interface AutonomyOffer {
