@@ -1,6 +1,7 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
+  ResearchResult,
   APIKey, APIKeysResponse, SecurityPolicy, SSOSettings, SCIMSettings,
   AccessReview,
   AuditReview,
@@ -319,6 +320,13 @@ export const api = {
     safe<{ finding_id: string; answer: string }>(
       `/v1/findings/${encodeURIComponent(findingID)}/localize`,
       { finding_id: findingID, answer: "" },
+    ),
+  // Bounded, cited research of a finding's OWN advisory URLs (internal/research). A named human (or a
+  // buyer's agent over the API) gets the pinned content; it is context, never evidence.
+  researchFinding: (id: string) =>
+    call<{ finding_id: string; result: ResearchResult; note?: string }>(
+      `/v1/research/finding/${encodeURIComponent(id)}`,
+      { method: "POST", body: "{}" },
     ),
   // P1 autonomy: the scope the pentester PROPOSES, from assets you connected or proved you own. The
   // human still signs for it — this replaces composing a scope with reviewing one. `skipped` carries
