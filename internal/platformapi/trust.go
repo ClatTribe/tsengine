@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/grc"
@@ -146,7 +147,7 @@ func (d Deps) handleTrust(w http.ResponseWriter, r *http.Request) {
 		// null would crash the PUBLIC page's .map (the Go nil-slice → JSON-null footgun, on a URL
 		// the customer shares with their own customers).
 		Frameworks:  []trustFramework{},
-		Documents:   trustcenter.Catalog(cfg, avail, granted),
+		Documents:   withProductNames(trustcenter.Catalog(cfg, avail, granted), t.Products),
 		Granted:     granted,
 		NDARequired: ndaRequired,
 		// Approved, but the agreement is still outstanding — the state where the buyer's next
@@ -213,4 +214,20 @@ func (d Deps) tenantHasSignedDecisions(ctx context.Context, tenantID string) boo
 		return false
 	}
 	return len(acts) > 0
+}
+
+// withProductNames puts the product's name in the title of a product-scoped document. A buyer reading
+// "Penetration test report" twice cannot tell which covers what they are buying; the scope belongs in the
+// one line they will read.
+func withProductNames(docs []trustcenter.Entry, products []platform.Product) []trustcenter.Entry {
+	names := map[string]string{}
+	for _, p := range products {
+		names[p.ID] = p.Name
+	}
+	for i, e := range docs {
+		if n := names[e.Product]; e.Product != "" && n != "" && !strings.Contains(e.Title, n) {
+			docs[i].Title = e.Title + " — " + n
+		}
+	}
+	return docs
 }
