@@ -28,7 +28,7 @@ func (d Deps) handleComplianceAdvisor(w http.ResponseWriter, r *http.Request, te
 		writeJSON(w, http.StatusNotFound, errBody("unknown framework: "+framework))
 		return
 	}
-	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleAnalysis)
+	llm := d.resolveAgentLLMForRole(aiKind(r.Context(), "compliance advisor", "compliance"), tenantID, platform.RoleAnalysis)
 	if llm == nil {
 		writeJSON(w, http.StatusBadRequest, llmRequiredBody("The compliance advisor"))
 		return

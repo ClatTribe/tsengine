@@ -17,7 +17,7 @@ import (
 // active+consent-gated) is what CONFIRMS a real bypass. The model only widens discovery → no false
 // positives (§10), same safety model as the pentest D-agent. Gated on an LLM; no LLM → 400.
 func (d Deps) handleAuthzDiscover(w http.ResponseWriter, r *http.Request, tenantID string) {
-	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleAnalysis)
+	llm := d.resolveAgentLLMForRole(aiKind(r.Context(), "api authz discovery", "pentest"), tenantID, platform.RoleAnalysis)
 	if llm == nil {
 		writeJSON(w, http.StatusBadRequest, llmRequiredBody("API authz discovery"))
 		return

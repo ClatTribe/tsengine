@@ -151,6 +151,17 @@ type Tenant struct {
 	// GuardDutyCursors is, per AWS connection id, the newest GuardDuty finding update read — the same
 	// cursor discipline as CloudEventCursors.
 	GuardDutyCursors map[string]time.Time `json:"guardduty_cursors,omitempty"`
+	// GuardDutyOff is, per AWS connection id, when a read last found NO GuardDuty detector in the
+	// connection's region. That is not a clean account: nothing is watching it for credential misuse or
+	// crypto-mining, so a quiet incident queue for it means nothing. Set on a not-enabled read, cleared by
+	// the next successful one, and surfaced in the degradation bar — the result was previously returned to
+	// the poller and dropped, so the customer read silence as safety.
+	GuardDutyOff map[string]time.Time `json:"guardduty_off,omitempty"`
+	// AutonomyGrants are the (finding class, remediation type) pairs the OWNER has let apply without a
+	// per-action approval, because this tenant's own record shows that fix closing that class every time
+	// it was tried (internal/autonomy). Earned, not configured: a grant can only be made while the record
+	// qualifies, and it stops working the moment anything applied under it fails to close.
+	AutonomyGrants []AutonomyGrant `json:"autonomy_grants,omitempty"`
 	// SlackWebhookRef is the secret.Vault-sealed ref for this tenant's OWN Slack Incoming Webhook —
 	// where THIS tenant's new-incident heads-ups go (per-tenant routing; the operator-env webhook is
 	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,
@@ -2388,4 +2399,19 @@ type AISpend struct {
 	// Verified is how many findings the run itself proved (verification_status verified) — the outcome
 	// the spend is weighed against. Counted at write time, against findings as they were then.
 	Verified int `json:"verified"`
+	// PerCall marks a row written for ONE model call by the metering wrapper (platformapi/aimeter.go)
+	// rather than for a whole run. Both count toward the monthly ceiling; the value view counts them as
+	// calls, not runs, because a code sweep making two hundred calls did not run two hundred times.
+	PerCall bool `json:"per_call,omitempty"`
+}
+
+// AutonomyGrant lets one (finding class, remediation type) skip the approval desk. GrantedBy is the named
+// owner who allowed it; BasisClosed is how many proven closures it was granted on, so the record shows
+// what the decision rested on, not only that it was made.
+type AutonomyGrant struct {
+	Class           string    `json:"class"`
+	RemediationType string    `json:"remediation_type"`
+	GrantedBy       string    `json:"granted_by"`
+	GrantedAt       time.Time `json:"granted_at"`
+	BasisClosed     int       `json:"basis_closed"`
 }

@@ -58,7 +58,7 @@ func (d Deps) handleTenantEvalModel(w http.ResponseWriter, r *http.Request, tena
 		return
 	}
 
-	llm := d.resolveAgentLLMForRole(ctx, tenantID, platform.RoleAnalysis)
+	llm := d.resolveAgentLLMForRole(aiKind(ctx, "eval scoring", "eval"), tenantID, platform.RoleAnalysis)
 	if llm == nil {
 		// Honest refusal, not a zero. A customer reading a 0 would conclude their model is useless
 		// when the truth is we never asked it anything.

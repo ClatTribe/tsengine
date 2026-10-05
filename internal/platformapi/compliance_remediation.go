@@ -23,7 +23,7 @@ func (d Deps) handleComplianceRemediation(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusBadRequest, errBody("compliance is not configured"))
 		return
 	}
-	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleAnalysis)
+	llm := d.resolveAgentLLMForRole(aiKind(r.Context(), "compliance remediation", "compliance"), tenantID, platform.RoleAnalysis)
 	if llm == nil {
 		writeJSON(w, http.StatusBadRequest, llmRequiredBody("Remediation guidance"))
 		return

@@ -207,6 +207,30 @@ func (m Memory) PromptLines() []string {
 	return out
 }
 
+// PromptBlock renders already-rendered lines (PromptLines) with the framing every agent receives. The
+// framing IS the safety rule — context, never evidence; never a reason to hide or downgrade a finding — so
+// it lives here once rather than being re-typed per agent, where one copy could quietly drift weaker than
+// the others. Empty input renders nothing, so an agent with no memory gets a byte-identical prompt.
+func PromptBlock(lines []string) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(PromptFraming)
+	for _, line := range lines {
+		b.WriteString("- ")
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// PromptFraming introduces the memory block. Exported so a test can assert every agent carries it.
+const PromptFraming = "WHAT THIS CUSTOMER HAS TOLD US — context, NOT evidence. Use it to route work to the named owner, " +
+	"keep to their scope, avoid re-proposing a fix they rejected, and explain better where they said our " +
+	"evidence did not convince them. Never cite it as proof of a finding, and never use it to hide, drop or " +
+	"downgrade one — a finding the scanners reported stays reported:\n"
+
 func clip(s string) string {
 	s = strings.Join(strings.Fields(s), " ") // one line, no embedded newlines
 	if len(s) > maxLine {

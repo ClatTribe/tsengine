@@ -47,7 +47,7 @@ func (d Deps) CWEAttributor() func(ctx context.Context, tenantID string, fs []ty
 			// behaviour under any doubt is to do nothing rather than to reason ungated.
 			return fs, nil
 		}
-		llm := d.resolveAgentLLM(ctx, tenantID)
+		llm := d.resolveAgentLLM(aiKind(ctx, "CWE attribution", "issue"), tenantID)
 		if llm == nil {
 			return fs, nil // no model: the findings keep the state they already have
 		}

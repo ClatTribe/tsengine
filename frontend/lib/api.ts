@@ -2,6 +2,8 @@ import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
   NotifyChannel, NotifyPatch, NotifySettings,
+  ResearchResult,
+  AutonomyReport,
   APIKey, APIKeysResponse, SecurityPolicy, SSOSettings, SCIMSettings,
   AccessReview,
   AuditReview,
@@ -99,8 +101,11 @@ export const api = {
   ackIncident: (id: string, by?: string) =>
     call<Incident>(`/v1/incidents/${id}/ack`, { method: "POST", body: JSON.stringify({ by: by ?? "" }) }),
   aiValue: () =>
-    safe<AIValue>("/v1/ai-value", { days: 30, surfaces: [], total: { surface: "all", runs: 0, unknown_cost_runs: 0, usd: 0, verified: 0 }, fixes_proven_closed: 0, unmetered: [] }),
+    safe<AIValue>("/v1/ai-value", { days: 30, surfaces: [], total: { surface: "all", runs: 0, unknown_cost_runs: 0, calls: 0, unknown_cost_calls: 0, usd: 0, verified: 0 }, fixes_proven_closed: 0, unmetered: [] }),
   agentMemory: () => safe<AgentMemory>("/v1/agent-memory", { lines: [] }),
+  autonomy: () => safe<AutonomyReport>("/v1/autonomy", { min_closed: 5, offers: [], grants: [] }),
+  setAutonomy: (b: { class: string; remediation_type: string; allow: boolean }) =>
+    call<AutonomyReport>("/v1/settings/autonomy", { method: "POST", body: JSON.stringify(b) }),
   addAgentNote: (text: string) => call<{ id: string }>("/v1/agent-memory/notes", { method: "POST", body: JSON.stringify({ text }) }),
   deleteAgentNote: (id: string) => call<void>(`/v1/agent-memory/notes/${id}`, { method: "DELETE" }),
   resolveIncident: (id: string, reason: string) =>
@@ -320,6 +325,13 @@ export const api = {
     safe<{ finding_id: string; answer: string }>(
       `/v1/findings/${encodeURIComponent(findingID)}/localize`,
       { finding_id: findingID, answer: "" },
+    ),
+  // Bounded, cited research of a finding's OWN advisory URLs (internal/research). A named human (or a
+  // buyer's agent over the API) gets the pinned content; it is context, never evidence.
+  researchFinding: (id: string) =>
+    call<{ finding_id: string; result: ResearchResult; note?: string }>(
+      `/v1/research/finding/${encodeURIComponent(id)}`,
+      { method: "POST", body: "{}" },
     ),
   // P1 autonomy: the scope the pentester PROPOSES, from assets you connected or proved you own. The
   // human still signs for it — this replaces composing a scope with reviewing one. `skipped` carries

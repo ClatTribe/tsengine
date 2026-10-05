@@ -79,9 +79,10 @@ func (d Deps) codeInvestigator(tenantID string) func(ctx context.Context, focus 
 			Repo:     owner + "/" + repo,
 			Findings: code,
 			Source:   codeagent.NewGitHubSource(owner, repo, gh.Config["ref"], token),
+			Memory:   d.agentMemory(ctx, tenantID, nil).PromptLines(),
 		}
 		meter, model := usageMeter(llm)
-		rep, ierr := codeagent.Investigate(ctx, llm, cc, codeagent.Options{MaxIters: 14, Ledger: d.Recorder})
+		rep, ierr := codeagent.Investigate(meteredRun(ctx), llm, cc, codeagent.Options{MaxIters: 14, Ledger: d.Recorder})
 		cost, known := meter()
 		d.recordAISpend(ctx, tenantID, "code", "code", cost, known, model, 0)
 		if ierr != nil {
@@ -129,6 +130,7 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 		Repo:     body.Repo,
 		Findings: body.Findings,
 		Source:   codeagent.NewMapSource(body.Source), // nil/empty source → the agent honestly reports it can't read code
+		Memory:   d.agentMemory(r.Context(), tenantID, nil).PromptLines(),
 	}
 	// Bracket the run (ADR 0018 §4), censused BEFORE the agent acts — afterwards there is
 	// no way to separate an issue the agent surfaced from the repository's existing backlog.
@@ -139,7 +141,7 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 	started := time.Now()
 
 	meter, model := usageMeter(llm)
-	rep, ierr := codeagent.Investigate(r.Context(), llm, cc, codeagent.Options{MaxIters: 24, Ledger: d.Recorder})
+	rep, ierr := codeagent.Investigate(meteredRun(r.Context()), llm, cc, codeagent.Options{MaxIters: 24, Ledger: d.Recorder})
 	cost, known := meter()
 	codeVerified := 0 // set once the run's findings are saved; read by the deferred spend record
 	defer func() { d.recordAISpend(r.Context(), tenantID, "code", "code", cost, known, model, codeVerified) }()

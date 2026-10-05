@@ -54,6 +54,11 @@ type Desk struct {
 	Notify   Notifier         // optional; pinged when an action queues for approval
 	Recorder *ledger.Recorder // optional; records every decision into the signed ledger
 	Now      func() time.Time
+	// Autonomy, when set, may let a tier-2 action skip the queue because the owner granted its kind of
+	// fix earned autonomy (internal/autonomy). It returns the approver to record. It is consulted for
+	// tier 2 ONLY — never for a T3 action, which needs a named human by invariant — and never while the
+	// kill-switch is engaged. Nil keeps every tier-2 action at the desk.
+	Autonomy func(ctx context.Context, a platform.Action) (approver string, ok bool)
 }
 
 func (d *Desk) now() time.Time {
@@ -77,9 +82,19 @@ func (d *Desk) Submit(ctx context.Context, a platform.Action) (platform.Action, 
 	if a.CreatedAt.IsZero() {
 		a.CreatedAt = d.now()
 	}
+	halted := d.halted(ctx, a.TenantID)
+	// Earned autonomy: a tier-2 action whose kind of fix the owner allowed on its record applies now,
+	// with the grant recorded as the approver. Exactly tier 2: a T3 action must reach a named human.
+	if !halted && a.Tier == platform.GateTier && d.Autonomy != nil {
+		if who, ok := d.Autonomy(ctx, a); ok && who != "" && who != autoApprover {
+			a.Approver = who
+			d.record("earned_autonomy", a, who)
+			return d.apply(ctx, a, who)
+		}
+	}
 	// Kill-switch: while halted, even a tier-0/1 auto-apply does NOT execute — it queues
 	// for a human, so nothing is lost and nothing acts. Disengaging + approving applies it.
-	if a.NeedsApproval() || d.halted(ctx, a.TenantID) {
+	if a.NeedsApproval() || halted {
 		a.Status = platform.ActPendingApproval
 		if err := d.Store.PutAction(ctx, a); err != nil {
 			return a, err

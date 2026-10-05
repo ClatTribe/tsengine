@@ -21,12 +21,17 @@ import (
 //     fix may have come from anywhere, and claiming it would be the overclaim this view exists to avoid.
 
 type surfaceValue struct {
-	Surface         string   `json:"surface"`
-	Runs            int      `json:"runs"`
-	UnknownCostRuns int      `json:"unknown_cost_runs"`
-	USD             float64  `json:"usd"`
-	Verified        int      `json:"verified"`
-	CostPerVerified *float64 `json:"cost_per_verified,omitempty"`
+	Surface         string `json:"surface"`
+	Runs            int    `json:"runs"`
+	UnknownCostRuns int    `json:"unknown_cost_runs"`
+	// Calls are single model calls recorded by the metering wrapper outside any run that prices itself
+	// (aimeter.go) — the code sweep, exploit proposals, CWE attribution and the rest. They are spend, so
+	// they count toward Spent and the monthly ceiling, but they are not runs.
+	Calls            int      `json:"calls"`
+	UnknownCostCalls int      `json:"unknown_cost_calls"`
+	USD              float64  `json:"usd"`
+	Verified         int      `json:"verified"`
+	CostPerVerified  *float64 `json:"cost_per_verified,omitempty"`
 }
 
 type aiValueView struct {
@@ -40,10 +45,9 @@ type aiValueView struct {
 }
 
 var unmeteredAIPaths = []string{
-	"pentest exploit proposals (AI Pentester)",
-	"proactive code sweep",
-	"CWE attribution",
-	"model scoring in your eval suite",
+	// The Detection Skill triage runs on the operator's model inside the detector, below the per-tenant
+	// resolve every other path goes through, so the meter never sees it.
+	"Detection Skill triage of newly opened incidents",
 }
 
 func (d Deps) handleAIValue(w http.ResponseWriter, r *http.Request, tenantID string) {
@@ -66,12 +70,21 @@ func (d Deps) handleAIValue(w http.ResponseWriter, r *http.Request, tenantID str
 			by[e.Surface] = sv
 		}
 		for _, v := range []*surfaceValue{sv, &view.Total} {
-			v.Runs++
 			v.Verified += e.Verified
 			if e.CostKnown {
 				v.USD += e.USD
-			} else {
-				v.UnknownCostRuns++
+			}
+			switch {
+			case e.PerCall:
+				v.Calls++
+				if !e.CostKnown {
+					v.UnknownCostCalls++
+				}
+			default:
+				v.Runs++
+				if !e.CostKnown {
+					v.UnknownCostRuns++
+				}
 			}
 		}
 	}
@@ -81,7 +94,7 @@ func (d Deps) handleAIValue(w http.ResponseWriter, r *http.Request, tenantID str
 	view.Surfaces = append(view.Surfaces, view.Total)
 	for i := range view.Surfaces {
 		v := &view.Surfaces[i]
-		if v.Verified > 0 && v.UnknownCostRuns == 0 && v.USD > 0 {
+		if v.Verified > 0 && v.UnknownCostRuns == 0 && v.UnknownCostCalls == 0 && v.USD > 0 {
 			c := v.USD / float64(v.Verified)
 			v.CostPerVerified = &c
 		}

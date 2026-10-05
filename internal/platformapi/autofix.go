@@ -23,7 +23,7 @@ import (
 // no LLM → 400. Grounded (§10): the prompt cites the real finding; the model never invents a vuln.
 func (d Deps) handleAutofix(w http.ResponseWriter, r *http.Request, tenantID string) {
 	id := r.PathValue("id")
-	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleCode)
+	llm := d.resolveAgentLLMForRole(aiKind(r.Context(), "autofix", "code"), tenantID, platform.RoleCode)
 	if llm == nil {
 		writeJSON(w, http.StatusBadRequest, llmRequiredBody("AI autofix"))
 		return

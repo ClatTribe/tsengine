@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ClatTribe/tsengine/internal/agentmemory"
 	"github.com/ClatTribe/tsengine/internal/cloudgraph"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -63,6 +64,11 @@ RULES
 		for _, br := range cc.Bridges {
 			b.WriteString("- " + br + "\n")
 		}
+		b.WriteByte('\n')
+	}
+
+	if blk := agentmemory.PromptBlock(cc.Memory); blk != "" {
+		b.WriteString(blk)
 		b.WriteByte('\n')
 	}
 
