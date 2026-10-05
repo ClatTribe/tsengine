@@ -79,6 +79,7 @@ func (d Deps) codeInvestigator(tenantID string) func(ctx context.Context, focus 
 			Repo:     owner + "/" + repo,
 			Findings: code,
 			Source:   codeagent.NewGitHubSource(owner, repo, gh.Config["ref"], token),
+			Memory:   d.agentMemory(ctx, tenantID, nil).PromptLines(),
 		}
 		meter, model := usageMeter(llm)
 		rep, ierr := codeagent.Investigate(meteredRun(ctx), llm, cc, codeagent.Options{MaxIters: 14, Ledger: d.Recorder})
@@ -129,6 +130,7 @@ func (d Deps) handleCodeInvestigate(w http.ResponseWriter, r *http.Request, tena
 		Repo:     body.Repo,
 		Findings: body.Findings,
 		Source:   codeagent.NewMapSource(body.Source), // nil/empty source → the agent honestly reports it can't read code
+		Memory:   d.agentMemory(r.Context(), tenantID, nil).PromptLines(),
 	}
 	// Bracket the run (ADR 0018 §4), censused BEFORE the agent acts — afterwards there is
 	// no way to separate an issue the agent surfaced from the repository's existing backlog.

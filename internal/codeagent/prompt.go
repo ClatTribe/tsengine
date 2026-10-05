@@ -3,6 +3,8 @@ package codeagent
 import (
 	"fmt"
 	"strings"
+
+	"github.com/ClatTribe/tsengine/internal/agentmemory"
 )
 
 // buildPrompt renders the system brief + the running transcript. The brief names the job (assess code
@@ -25,6 +27,11 @@ You reason; the TOOLS are your hands over the real repository source. You may ON
 shows you.
 `)
 	fmt.Fprintf(&b, "\nRepository: %s\nCode findings in scope: %d\n\n", firstNonEmpty(cc.Repo, "(unnamed)"), len(cc.Findings))
+
+	if blk := agentmemory.PromptBlock(cc.Memory); blk != "" {
+		b.WriteString(blk)
+		b.WriteByte('\n')
+	}
 
 	b.WriteString("TOOLS (call exactly ONE per turn):\n")
 	for _, t := range tools() {
