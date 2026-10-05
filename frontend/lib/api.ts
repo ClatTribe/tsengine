@@ -1,6 +1,7 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
+  AutonomyReport,
   APIKey, APIKeysResponse, SecurityPolicy, SSOSettings, SCIMSettings,
   AccessReview,
   AuditReview,
@@ -100,6 +101,9 @@ export const api = {
   aiValue: () =>
     safe<AIValue>("/v1/ai-value", { days: 30, surfaces: [], total: { surface: "all", runs: 0, unknown_cost_runs: 0, calls: 0, unknown_cost_calls: 0, usd: 0, verified: 0 }, fixes_proven_closed: 0, unmetered: [] }),
   agentMemory: () => safe<AgentMemory>("/v1/agent-memory", { lines: [] }),
+  autonomy: () => safe<AutonomyReport>("/v1/autonomy", { min_closed: 5, offers: [], grants: [] }),
+  setAutonomy: (b: { class: string; remediation_type: string; allow: boolean }) =>
+    call<AutonomyReport>("/v1/settings/autonomy", { method: "POST", body: JSON.stringify(b) }),
   addAgentNote: (text: string) => call<{ id: string }>("/v1/agent-memory/notes", { method: "POST", body: JSON.stringify({ text }) }),
   deleteAgentNote: (id: string) => call<void>(`/v1/agent-memory/notes/${id}`, { method: "DELETE" }),
   resolveIncident: (id: string, reason: string) =>
