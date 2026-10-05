@@ -48,6 +48,10 @@ type Context struct {
 	Findings []types.Finding // the code findings under investigation (semgrep/gitleaks/trivy — file:line endpoints)
 	Source   SourceProvider  // read-only access to the repo (the grounding oracle)
 	Repo     string          // display name of the repository
+	// Memory is what this customer has told us (internal/agentmemory). CONTEXT, never evidence: a
+	// rejected fix style or an accepted risk changes what the agent proposes and how it explains, never
+	// whether a grounded issue is recorded.
+	Memory []string
 
 	Issues  []CodeIssue
 	Summary string
