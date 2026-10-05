@@ -57,6 +57,17 @@ type User struct {
 	TOTPPendingRef string   `json:"-"`
 	TOTPLastStep   int64    `json:"-"`
 	RecoveryHashes []string `json:"-"`
+	// Disabled is set when the company's identity provider deprovisions this person (SCIM, scim.go).
+	// A disabled seat signs in NOWHERE and every session it holds stops working, but the seat is KEPT:
+	// approvals, attestations and risk decisions it signed must keep naming a real person, so a
+	// departure is a state, never a delete. DisabledBy records what did it ("scim").
+	Disabled   bool      `json:"disabled,omitempty"`
+	DisabledAt time.Time `json:"disabled_at,omitzero"`
+	DisabledBy string    `json:"disabled_by,omitempty"`
+	// ProvisionedBy is "scim" for a seat the identity provider created; ExternalID is the provider's own
+	// id for the person, echoed back so it can reconcile.
+	ProvisionedBy string `json:"provisioned_by,omitempty"`
+	ExternalID    string `json:"external_id,omitempty"`
 	// ResetTokenHash is the SHA-256 (hex) of a one-time password-reset token; the raw token is
 	// emailed to the user and never stored. ResetTokenExpires bounds validity. Both clear on
 	// completion. Never serialized to clients (json:"-").

@@ -84,6 +84,8 @@ type Tenant struct {
 	// SSO is the workspace's OpenID Connect sign-in (internal/platformapi/sso.go). Its client secret is
 	// SEALED (§18.2 inv. 6) and the whole block is dropped by Redacted, like every other credential.
 	SSO *SSOConfig `json:"sso,omitempty"`
+	// SCIM is the identity provider's provisioning endpoint config (scim.go). Nil = not set up.
+	SCIM *SCIMConfig `json:"scim,omitempty"`
 	// MonthlyAIBudgetUSD is a hard ceiling on what the AI agents may cost this calendar month, in USD.
 	// 0 means no ceiling.
 	//
@@ -1035,8 +1037,22 @@ func (t Tenant) Redacted() Tenant {
 	t.Drata = nil
 	t.MDM = nil
 	t.HRIS = nil
-	t.SSO = nil // carries a sealed client secret; the settings endpoint reports a safe view
+	t.SSO = nil  // carries a sealed client secret; the settings endpoint reports a safe view
+	t.SCIM = nil // carries the provisioning token's digest
 	return t
+}
+
+// SCIMConfig is the workspace's provisioning endpoint for its identity provider (scim.go).
+type SCIMConfig struct {
+	// TokenHash is the SHA-256 of the provisioning token; the token itself is shown once and never stored.
+	TokenHash   string    `json:"token_hash"`
+	TokenPrefix string    `json:"token_prefix"` // enough of the token to recognise it in the IdP's settings
+	CreatedBy   string    `json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
+	LastUsedAt  time.Time `json:"last_used_at,omitzero"`
+	// DefaultRole is the seat a provisioned person gets. Never "owner": ownership is a decision a person
+	// makes in this product, not one an identity-provider assignment makes for them.
+	DefaultRole string `json:"default_role"`
 }
 
 // SSOConfig is a workspace's OpenID Connect provider (Okta, Entra ID, Google Workspace, any OIDC IdP).

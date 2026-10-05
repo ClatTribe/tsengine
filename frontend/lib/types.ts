@@ -2165,3 +2165,17 @@ export interface BoardDigestSettings {
   delivery_configured: boolean;
   delivery_note?: string;
 }
+
+// SCIM provisioning (GET /v1/settings/scim). The token is present ONLY on the response that minted it.
+export interface SCIMSettings {
+  configured: boolean;
+  base_url: string;
+  token_prefix?: string;
+  created_by?: string;
+  created_at?: string;
+  last_used_at?: string;
+  default_role?: "member" | "employee" | "auditor";
+  provisioned: number;
+  deactivated: number;
+  token?: string;
+}

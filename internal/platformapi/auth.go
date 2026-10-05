@@ -37,6 +37,13 @@ func (d Deps) resolveSession(r *http.Request) (platform.Session, bool) {
 	if s.MFAPending || s.SSOFlow != nil {
 		return platform.Session{}, false
 	}
+	// A seat the identity provider deprovisioned (scim.go) authenticates nothing, from any session it
+	// already held. Deactivation also deletes those sessions; checking here as well means a session that
+	// survived a failed delete — or was minted in the instant between — still cannot be used. Refused only
+	// on a POSITIVE disabled flag: a read error must not lock everyone out.
+	if u, err := d.Store.GetUser(r.Context(), s.UserID); err == nil && u.Disabled {
+		return platform.Session{}, false
+	}
 	return s, true
 }
 
@@ -147,6 +154,11 @@ func (d Deps) handleLogin(w http.ResponseWriter, r *http.Request) {
 	u, err := d.Store.GetUserByEmail(r.Context(), email)
 	if err != nil || !authn.VerifyPassword(body.Password, u.PasswordHash) {
 		writeJSON(w, http.StatusUnauthorized, errBody("invalid email or password"))
+		return
+	}
+	// Checked only after the password is right, so this message reveals nothing to someone guessing.
+	if u.Disabled {
+		writeJSON(w, http.StatusForbidden, errCode("this account was deactivated by your organisation's identity provider", "account_disabled"))
 		return
 	}
 	// A workspace that enforces SSO closes the password door to every seat but the owner's (whose
