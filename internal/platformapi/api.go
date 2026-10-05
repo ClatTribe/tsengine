@@ -370,6 +370,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/scuba/ingest", d.auth(d.handleScubaIngest))                         // correlate a customer ScubaGear run against ours
 	mux.HandleFunc("GET /v1/incidents", d.auth(d.handleIncidents))
 	mux.HandleFunc("GET /v1/ai-value", d.auth(d.handleAIValue))                           // AI spend vs findings it proved, per surface (last 30 days)
+	mux.HandleFunc("GET /v1/ai-budget", d.auth(d.handleAIBudget))                         // where the next AI tokens should go: ranked, costed per-surface plan
 	mux.HandleFunc("GET /v1/agent-memory", d.auth(d.handleGetAgentMemory))                // exactly what the AI engineer is told about this workspace
 	mux.HandleFunc("POST /v1/agent-memory/notes", d.auth(d.handleAddAgentNote))           // tell the AI engineer something, in your own words
 	mux.HandleFunc("DELETE /v1/agent-memory/notes/{id}", d.auth(d.handleDeleteAgentNote)) // remove a note

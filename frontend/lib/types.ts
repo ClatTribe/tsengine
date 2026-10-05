@@ -2221,3 +2221,28 @@ export interface AIValue {
   fixes_proven_closed: number;
   unmetered: string[];
 }
+
+// GET /v1/ai-budget — where the next AI tokens should go: a ranked, costed per-surface plan. The twin of
+// AIValue (what tokens bought) — this is where they should go next. A surface with no open exposure gets 0.
+// cost_per_verified / recommended_usd are absent when unknown; basis says what each share rests on.
+export interface AIBucket {
+  surface: string;
+  open_issues: number;
+  exposure: number;
+  runs: number;
+  verified: number;
+  usd_known: number;
+  unknown_cost_runs: number;
+  cost_per_verified?: number;
+  share_pct: number;
+  recommended_usd?: number;
+  basis: string;
+}
+export interface AIBudgetPlan {
+  monthly_budget_usd: number;
+  budget_set: boolean;
+  buckets: AIBucket[];
+  attributed_issues: number;
+  unattributed_issues: number;
+  notes: string[];
+}
