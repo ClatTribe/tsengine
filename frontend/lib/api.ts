@@ -1,7 +1,7 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
-  APIKey, APIKeysResponse, SecurityPolicy, SSOSettings,
+  APIKey, APIKeysResponse, SecurityPolicy, SSOSettings, SCIMSettings,
   AccessReview,
   AuditReview,
   AuditCertificate,
@@ -856,6 +856,10 @@ export const api = {
   revokeAPIKey: (id: string) => call<APIKey>(`/v1/settings/api-keys/${id}/revoke`, { method: "POST" }),
   securityPolicy: () => safe<SecurityPolicy | null>("/v1/settings/security", null),
   ssoSettings: () => safe<SSOSettings | null>("/v1/settings/sso", null),
+  scimSettings: () => safe<SCIMSettings | null>("/v1/settings/scim", null),
+  mintSCIMToken: (defaultRole: string) =>
+    call<SCIMSettings>("/v1/settings/scim/token", { method: "POST", body: JSON.stringify({ default_role: defaultRole }) }),
+  revokeSCIM: () => call<SCIMSettings>("/v1/settings/scim", { method: "DELETE" }),
   setSSO: (b: { issuer: string; client_id?: string; client_secret?: string; enforced?: boolean }) =>
     call<SSOSettings>("/v1/settings/sso", { method: "PUT", body: JSON.stringify(b) }),
   setSecurityPolicy: (requireTwoFactor: boolean) =>

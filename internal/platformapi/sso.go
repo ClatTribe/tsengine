@@ -274,6 +274,9 @@ func (d Deps) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
 		return
+	case u.Disabled:
+		refuse("this account was deactivated by your organisation's identity provider", "account_disabled")
+		return
 	}
 	// The person's own authenticator is never bypassed by SSO: without a provider-asserted second
 	// factor, they are asked for it as they would be at the password door.
