@@ -7,6 +7,7 @@ import { lastTriage } from "../brief/actions";
 import { AskEstate } from "@/components/engineer/ask-estate";
 import { EngineStatus } from "@/components/engineer/engine-status";
 import { AIValueCard } from "@/components/engineer/ai-value";
+import { AIBudgetCard } from "@/components/engineer/ai-budget";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -55,8 +56,8 @@ const ACTIONS = [
 
 export default async function EngineerConsolePage() {
   // Scope so the founder sees WHAT the engineer reasons over (coverage honesty) before triggering an action.
-  const [findings, assets, engagements, priorBrief, approvals, llm, aiValue] = await Promise.all([
-    api.findings(), api.assets(), api.engagements(), lastTriage(), api.approvals(), api.llmSettings(), api.aiValue(),
+  const [findings, assets, engagements, priorBrief, approvals, llm, aiValue, aiBudget] = await Promise.all([
+    api.findings(), api.assets(), api.engagements(), lastTriage(), api.approvals(), api.llmSettings(), api.aiValue(), api.aiBudget(),
   ]);
   const freshest = engagements.map((e) => e.completed_at).filter(Boolean).sort().pop();
 
@@ -74,6 +75,7 @@ export default async function EngineerConsolePage() {
 
       {/* What the runs cost against what they PROVED — the allocation question, answered from real spend. */}
       <AIValueCard v={aiValue} />
+      <AIBudgetCard p={aiBudget} />
 
       {/* ASK FIRST. The question the job actually opens with, and the one capability the agent had
           all along that no human could reach. */}

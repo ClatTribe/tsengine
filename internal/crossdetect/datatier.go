@@ -100,3 +100,11 @@ func assetForEndpoint(endpoint string, assets []platform.Asset) (platform.Asset,
 	}
 	return best, bestLen > 0
 }
+
+// AssetForEndpoint exposes the endpoint→asset attribution used by PrioritizeByDataTier so other
+// platform-layer analytics (the AI-budget allocator) attribute an issue to its asset by the SAME
+// longest-matching-Target rule, rather than reimplementing it and risking drift. Grounded (§10):
+// ok=false when no asset's Target literally appears in the endpoint — never a guess.
+func AssetForEndpoint(endpoint string, assets []platform.Asset) (platform.Asset, bool) {
+	return assetForEndpoint(endpoint, assets)
+}
