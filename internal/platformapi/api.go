@@ -152,6 +152,10 @@ type Deps struct {
 	// the default public-only fetcher (safeResearchFetcher). Injected in tests so the handler's
 	// allowlist/selection logic is checked without the network.
 	ResearchFetch research.Fetcher
+	// AgentLLMFactory, when set, builds a FRESH operator client per resolve so each run's usage is read
+	// from a counter no other tenant shares (aimeter.go). AgentLLM stays the "is a model configured" signal
+	// and the fallback when the factory returns nil.
+	AgentLLMFactory func() pentest.SpecLLM
 	// LeadClient is the operator-global tool-calling client for the L2 Lead/translator (POST
 	// /v1/l2/translate). Wired from l2.ClientFromEnv (Anthropic, OpenAI, or a local Ollama); a tenant's
 	// own configured model takes precedence. Nil → the translator endpoint is gated (400).
@@ -323,6 +327,8 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/contacts", d.auth(d.handleAddContact))                                       // add a contact
 	mux.HandleFunc("DELETE /v1/contacts/{id}", d.auth(d.handleDeleteContact))                             // remove a contact
 	mux.HandleFunc("POST /v1/research/finding/{id}", d.auth(d.handleResearchFinding))                     // bounded, cited advisory research for one finding (input-to-propose, never evidence)
+	mux.HandleFunc("GET /v1/autonomy", d.auth(d.handleGetAutonomy))                                       // earned autonomy: offers + grants
+	mux.HandleFunc("POST /v1/settings/autonomy", d.auth(d.handleSetAutonomy))                             // owner grants/withdraws earned autonomy for one fix kind
 	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                                     // global kill-switch: halt/resume all agent action
 	mux.HandleFunc("GET /v1/ai-bom", d.auth(d.handleAIBOM))                                               // agent capability manifest (WRD-1): what the automation can touch
 	mux.HandleFunc("GET /v1/trust-link", d.auth(d.handleTrustLink))                                       // owner's shareable Trust Center token

@@ -36,7 +36,7 @@ import (
 //
 // ON DEMAND, never automatic: it costs a model call per task, so it runs when someone asks.
 func (d Deps) handleCodeSweep(w http.ResponseWriter, r *http.Request, tenantID string) {
-	llm := d.resolveAgentLLMForRole(r.Context(), tenantID, platform.RoleCode)
+	llm := d.resolveAgentLLMForRole(aiKind(r.Context(), "code sweep", "code"), tenantID, platform.RoleCode)
 	if llm == nil {
 		writeJSON(w, http.StatusBadRequest, llmRequiredBody("Proactive code sweep"))
 		return

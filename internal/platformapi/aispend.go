@@ -46,13 +46,17 @@ func usageMeter(llm any) (func() (float64, bool), string) {
 // recordAISpend appends one run's cost. Best-effort: a store failure loses the row and is logged; it never
 // fails the run, whose output the customer already has.
 func (d Deps) recordAISpend(ctx context.Context, tenantID, kind, surface string, usd float64, known bool, model string, verified int) {
+	d.putSpend(ctx, platform.AISpend{
+		ID: spendID(), TenantID: tenantID, At: time.Now().UTC(), Kind: kind, Surface: surface,
+		USD: usd, CostKnown: known, Model: model, Verified: verified,
+	})
+}
+
+func (d Deps) putSpend(ctx context.Context, e platform.AISpend) {
 	if d.Store == nil {
 		return
 	}
-	e := platform.AISpend{
-		ID: spendID(), TenantID: tenantID, At: time.Now().UTC(), Kind: kind, Surface: surface,
-		USD: usd, CostKnown: known, Model: model, Verified: verified,
-	}
+	tenantID, kind, known := e.TenantID, e.Kind, e.CostKnown
 	if !known {
 		e.USD = 0
 	}

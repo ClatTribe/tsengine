@@ -2210,6 +2210,8 @@ export interface AISurfaceValue {
   surface: string;
   runs: number;
   unknown_cost_runs: number;
+  calls: number;
+  unknown_cost_calls: number;
   usd: number;
   verified: number;
   cost_per_verified?: number;
@@ -2237,4 +2239,26 @@ export interface ResearchResult {
   documents?: ResearchDocument[];
   unavailable?: { url: string; reason: string }[];
   rejected?: { url: string; reason: string }[];
+}
+// Earned autonomy (GET /v1/autonomy): which kinds of fix have closed their kind of finding every time,
+// and which the owner has allowed to apply without a per-action approval.
+export interface AutonomyOffer {
+  class: string;
+  remediation_type: string;
+  closed: number;
+}
+export interface AutonomyGrantStatus {
+  class: string;
+  remediation_type: string;
+  granted_by: string;
+  granted_at: string;
+  basis_closed: number;
+  active: boolean;
+  reason?: string;
+  applied_since: number;
+}
+export interface AutonomyReport {
+  min_closed: number;
+  offers: AutonomyOffer[];
+  grants: AutonomyGrantStatus[];
 }

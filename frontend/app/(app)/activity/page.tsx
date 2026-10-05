@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { ActivityTimeline, type ActivityEvent } from "@/components/activity/activity-timeline";
 import { PageIntro } from "@/components/ui/page-intro";
 import { ExposureObjective } from "@/components/activity/exposure-objective";
+import { AutonomyToggle } from "./autonomy";
 
 export const dynamic = "force-dynamic";
 
@@ -34,13 +35,16 @@ function withApprover(meta: string | undefined, approver?: string): string {
 }
 
 export default async function ActivityPage() {
-  const [incidents, engagements, approvals, actions, trend] = await Promise.all([
+  const [incidents, engagements, approvals, actions, trend, autonomy, me] = await Promise.all([
     api.incidents("all"),
     api.engagements(),
     api.approvals(),
     api.actions(),
     api.exposureTrend(),
+    api.autonomy(),
+    api.me(),
   ]);
+  const isOwner = me?.role === "owner";
 
   const events: ActivityEvent[] = [];
 
@@ -162,6 +166,53 @@ export default async function ActivityPage() {
               ))}
             </span>
           </span>
+        </div>
+      )}
+      {(autonomy.offers.length > 0 || autonomy.grants.length > 0) && (
+        <div className="card px-4 py-3 text-sm">
+          <div className="font-medium text-ink">Fixes that have earned autonomy</div>
+          <p className="mt-1 text-xs text-muted">
+            A kind of fix is offered here once it has closed its kind of finding {autonomy.min_closed} times with
+            no failure and nothing left unconfirmed. Allowing it lets those fixes apply without waiting for an
+            approval. Irreversible actions always need a person, the kill-switch still stops everything, and
+            one failure sends the fix back to the approval desk until you allow it again.
+          </p>
+          <div className="mt-2 space-y-1.5 text-xs">
+            {autonomy.offers.map((o) => (
+              <div key={`o:${o.class}:${o.remediation_type}`} className="flex flex-wrap items-center gap-2 text-muted">
+                <span>
+                  <span className="font-mono text-subtle">{o.remediation_type}</span> on{" "}
+                  <span className="font-mono text-subtle">{o.class}</span> — closed {o.closed} of {o.closed}
+                </span>
+                {isOwner ? (
+                  <AutonomyToggle cls={o.class} remediationType={o.remediation_type} allow label="Allow without approval" />
+                ) : (
+                  <span className="text-faint">the workspace owner can allow this</span>
+                )}
+              </div>
+            ))}
+            {autonomy.grants.map((g) => (
+              <div key={`g:${g.class}:${g.remediation_type}`} className="text-muted">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>
+                    <span className="font-mono text-subtle">{g.remediation_type}</span> on{" "}
+                    <span className="font-mono text-subtle">{g.class}</span>
+                  </span>
+                  <span className={g.active ? "text-low" : "text-high"}>
+                    {g.active ? "applies without approval" : "back at the approval desk"}
+                  </span>
+                  <span className="text-faint">
+                    allowed by {g.granted_by} on {g.granted_at.slice(0, 10)} after {g.basis_closed} closures ·{" "}
+                    {g.applied_since} applied since
+                  </span>
+                  {isOwner && (
+                    <AutonomyToggle cls={g.class} remediationType={g.remediation_type} allow={false} label="Withdraw" />
+                  )}
+                </div>
+                {!g.active && g.reason && <div className="mt-0.5 text-faint">{g.reason}</div>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {trend.points.length > 0 && (
