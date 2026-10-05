@@ -56,6 +56,7 @@ func (d Deps) handleCloudInvestigate(w http.ResponseWriter, r *http.Request, ten
 		// G2: feed the cross-surface footholds (a leaked key in code, an exposed host) that correlate
 		// INTO this account, so the depth agent verifies paths FROM them first — the code→cloud wedge.
 		Bridges: d.tenantCloudBridges(r.Context(), tenantID),
+		Memory:  d.agentMemory(r.Context(), tenantID, nil).PromptLines(),
 		// The graph those bridges were a lossy proxy for. Bridges say WHERE a foothold is; the estate
 		// lets the agent walk from it — back to the key's origin in code, or on to what else touches
 		// the principal. Best-effort: a compose failure leaves it nil and estate_context says so.
@@ -355,9 +356,10 @@ func (d Deps) cloudInvestigator(tenantID string) func(ctx context.Context, focus
 		cc := &cloudagent.Context{
 			Snap: cloudgraph.Ingest(inv), Prowler: snap.Prowler,
 			Bridges: d.tenantCloudBridges(ctx, tenantID), // G2: cross-surface footholds (code→cloud wedge)
-			Estate:  d.estateOrNil(ctx, tenantID),        // the walkable graph behind those hints
-			Live:    d.liveReaderOrNil(ctx, tenantID),    // confirm config flags against the live account
-			Prober:  d.proberOrNil(ctx, tenantID),        // ADR 0024 P1: the provider's own authorization answer
+			Memory:  d.agentMemory(ctx, tenantID, nil).PromptLines(),
+			Estate:  d.estateOrNil(ctx, tenantID),     // the walkable graph behind those hints
+			Live:    d.liveReaderOrNil(ctx, tenantID), // confirm config flags against the live account
+			Prober:  d.proberOrNil(ctx, tenantID),     // ADR 0024 P1: the provider's own authorization answer
 		}
 		// Bounded specialist run (it's a nested agent — keep it tight). pentest.SpecLLM satisfies
 		// cloudengine.LLM structurally (same Generate), as the on-demand handler above relies on.

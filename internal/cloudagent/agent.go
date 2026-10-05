@@ -27,6 +27,11 @@ type Context struct {
 	// bridge only widens where it LOOKS, it can never fabricate a path.
 	Bridges []string
 
+	// Memory is what this customer has told us (internal/agentmemory) — owners, scope, accepted risks,
+	// rejected fixes, their own notes. CONTEXT, never evidence: it may shape where the agent looks and
+	// how it explains, never whether a grounded issue is recorded.
+	Memory []string
+
 	// Estate is the CROSS-SURFACE graph (internal/estategraph) this cloud account sits inside —
 	// code, SaaS, identity, warehouse and cloud in one typed structure. It is what turns the
 	// Bridges hints above from prose into something the agent can actually WALK: a bridge said
