@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Wand2, Loader2, CircleAlert } from "lucide-react";
+import { Wand2, Loader2, CircleAlert, Check, X, Minus } from "lucide-react";
 import { getAutofix, type AutofixResult } from "@/app/(app)/findings/[id]/actions";
 
 // "Generate AI fix" — runs the autofix agent for this finding and renders the LLM-generated, grounded
@@ -35,6 +35,26 @@ export function AutofixButton({ id }: { id: string }) {
         <div className="rounded-xl border border-border bg-surface p-4">
           <p className="prose-fix whitespace-pre-wrap text-sm leading-relaxed text-muted">{res.fix}</p>
           <p className="mt-2 text-[11px] text-faint">AI-drafted patch grounded in this finding — review before you merge.</p>
+          {res.soundness && res.soundness.checks.length > 0 && (
+            <div className="mt-3 border-t border-border pt-3">
+              <p className="mb-1.5 text-[11px] font-medium text-ink">Pre-delivery checks</p>
+              <ul className="space-y-1">
+                {res.soundness.checks.map((c) => (
+                  <li key={c.name} className="flex items-start gap-1.5 text-[11px]">
+                    {c.status === "pass" ? (
+                      <Check className="mt-0.5 h-3 w-3 shrink-0 text-good" />
+                    ) : c.status === "fail" ? (
+                      <X className="mt-0.5 h-3 w-3 shrink-0 text-critical" />
+                    ) : (
+                      <Minus className="mt-0.5 h-3 w-3 shrink-0 text-faint" />
+                    )}
+                    <span className={c.status === "fail" ? "text-critical" : "text-muted"}>{c.message}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-[11px] text-faint">{res.soundness.note}</p>
+            </div>
+          )}
         </div>
       )}
     </div>

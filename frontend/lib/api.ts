@@ -16,7 +16,7 @@ import type {
   ExposureTrend,
   AttackCoverage,
   FeedbackSummary,
-  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, MDMSettings, DeviceSyncResult, HRISSettings, HRISSyncResult, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, BoardDigestSettings, AgentMemory, AIValue, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User, ProductsView } from "./types";
+  L15Audit, TenantEval, Job, Branding, BrandingSettings, DrataSettings, MDMSettings, DeviceSyncResult, HRISSettings, HRISSyncResult, SystemState, FindingsSummary, ReadinessChecklist, AIAnalysis, AIBom, DatabaseScanResult, AIModeResponse, Action, ActionsView, ComplianceFixes, CoverageSummary, Asset, AttackPaths, ComplianceByAsset, ComplianceProfile, ComplianceReadiness, ComplianceReport, ComplianceScope, ComplianceSnapshot, EvidenceTimeline, SecurityByAsset, CustomControl, CustomFramework, CustomFrameworkPosture, Connection, Contact, ControlState, Engagement, EscalationPolicy, ExclusionRule, Finding, Incident, Issue, IssuesResponse, PentestEngagement, PentestReadiness, PentestStats, OwnershipChallenge, OwnershipResult, PostureSummary, PRBotSettings, ProofRequest, TrainingSettings, EpisodeStats, Questionnaire, ReviewRequest, MaintenanceWindow, IdentitiesResponse, Risk, RisksResponse, AuditEngagement, AuditsResponse, Policy, ProgramResponse, Practitioner, PractitionersResponse, SaaSAppsResponse, SLAPolicy, BoardDigestSettings, AgentMemory, AIValue, SOCMetrics, Tenant, TrustLink, TrustSettings, TrustCenterConfig, TrustAccessRequest, User, ProductsView, FixSoundness } from "./types";
 
 // Server-side client for the Go /v1 API. Every call carries the session's bearer token +
 // X-Tenant-ID; the browser is never involved (no CORS, no token exposure). Reads are
@@ -209,7 +209,7 @@ export const api = {
 
   // AI autofix — an LLM-generated code patch for one finding (competitor parity: Snyk/Aikido/Copilot).
   autofix: (id: string) =>
-    call<{ finding_id: string; title: string; rule_id: string; fix: string }>(
+    call<{ finding_id: string; title: string; rule_id: string; fix: string; soundness?: FixSoundness }>(
       `/v1/findings/${id}/autofix`,
       { method: "POST", body: "{}" },
     ),
