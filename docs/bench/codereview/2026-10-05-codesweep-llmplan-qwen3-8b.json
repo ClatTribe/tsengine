@@ -1,0 +1,134 @@
+{
+  "tool": "codesweep",
+  "model": "qwen3:8b",
+  "cases": {
+    "GHSA-4x45-gxvp-6283": null,
+    "GHSA-756x-9hf6-q4h4": [
+      {
+        "file": "ap-web/src/lib/identity.ts",
+        "line": 81,
+        "rule": "CWE-601"
+      },
+      {
+        "file": "ap-web/src/lib/identity.ts",
+        "line": 174,
+        "rule": "CWE-601"
+      }
+    ],
+    "GHSA-jjhp-8crj-mppq": [
+      {
+        "file": "src/accounts/account-manager.ts",
+        "line": 254,
+        "rule": "CWE-338"
+      },
+      {
+        "file": "src/accounts/account-manager.ts",
+        "line": 340,
+        "rule": "CWE-338"
+      },
+      {
+        "file": "src/auth/auth-manager.ts",
+        "line": 322,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "src/auth/auth-manager.ts",
+        "line": 323,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "src/auth/auth-manager.ts",
+        "line": 324,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "src/auth/auth-manager.ts",
+        "line": 325,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "src/auth/auth-manager.ts",
+        "line": 326,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "src/auth/auth-manager.ts",
+        "line": 327,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "src/auth/auth-manager.ts",
+        "line": 328,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "src/auth/auth-manager.ts",
+        "line": 329,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "src/auth/auth-manager.ts",
+        "line": 330,
+        "rule": "CWE-22"
+      }
+    ],
+    "GHSA-m37j-52j7-pjw7": [
+      {
+        "file": "registry/remote/registry.go",
+        "line": 100,
+        "rule": "CWE-918"
+      },
+      {
+        "file": "registry/remote/registry.go",
+        "line": 146,
+        "rule": "CWE-918"
+      }
+    ]
+  },
+  "ran": {
+    "GHSA-4x45-gxvp-6283": true,
+    "GHSA-756x-9hf6-q4h4": true,
+    "GHSA-jjhp-8crj-mppq": true,
+    "GHSA-m37j-52j7-pjw7": true
+  },
+  "examined": {
+    "GHSA-4x45-gxvp-6283": [
+      "packages/cli/src/index.ts",
+      "packages/gitlab/src/cli.ts",
+      "packages/api-client/src/api.ts",
+      "packages/core/mocks/oidc.ts",
+      "packages/core/src/s3.ts",
+      "examples/remix/app/data.ts",
+      "packages/cli/e2e/utils.js",
+      "packages/core/src/ci-environment/git.ts"
+    ],
+    "GHSA-756x-9hf6-q4h4": [
+      "omnigent/llms/adapters/gemini.py",
+      "omnigent/host/connect.py",
+      "omnigent/inner/pi_executor.py",
+      "omnigent/inner/loader.py",
+      "ap-web/src/lib/identity.ts",
+      "ap-web/src/pages/LoginPage.tsx",
+      "ap-web/src/pages/RegisterPage.tsx",
+      "omnigent/stores/conversation_store/sqlalchemy_store.py"
+    ],
+    "GHSA-jjhp-8crj-mppq": [
+      "src/content/content-manager.ts",
+      "src/utils/cleanup-manager.ts",
+      "src/http-wrapper.ts",
+      "src/accounts/account-manager.ts",
+      "src/auth/auth-manager.ts",
+      "website/docusaurus.config.ts"
+    ],
+    "GHSA-m37j-52j7-pjw7": [
+      "registry/remote/retry/policy.go",
+      "registry/remote/auth/client.go",
+      "registry/remote/registry.go",
+      "registry/remote/repository.go",
+      "content/file/file.go",
+      "content/file/utils.go",
+      "content/oci/oci.go",
+      "content/oci/storage.go"
+    ]
+  }
+}
