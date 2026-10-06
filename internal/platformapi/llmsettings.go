@@ -81,7 +81,7 @@ func (d Deps) handlePutLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 	}
 	role := strings.ToLower(strings.TrimSpace(body.Role))
 	if role != "" && !platform.ValidAgentRole(role) {
-		writeJSON(w, http.StatusBadRequest, errBody("role must be one of: analysis, code (or omitted for the default model)"))
+		writeJSON(w, http.StatusBadRequest, errBody("role must be one of: analysis, code, code_draft (or omitted for the default model)"))
 		return
 	}
 	body.Provider = strings.ToLower(strings.TrimSpace(body.Provider))
@@ -239,6 +239,33 @@ func (d Deps) resolveAgentLLMForRole(ctx context.Context, tenantID string, role 
 		return d.meter(ctx, d.operatorAgentLLM(), tenantID)
 	}
 	return nil
+}
+
+// resolveDraftLLM returns the tenant's explicitly configured draft model for the code-fix cascade, or nil.
+// It honours the same instructions as every resolve (AI mode, kill-switch, monthly ceiling) and is never
+// the operator's model: a cascade is a choice the customer makes about their own models.
+func (d Deps) resolveDraftLLM(ctx context.Context, tenantID string) pentest.SpecLLM {
+	if !d.aiAllowed(ctx, tenantID).Engineer {
+		return nil
+	}
+	t, err := d.Store.GetTenant(ctx, tenantID)
+	if err != nil || t.DraftLLM() == nil {
+		return nil
+	}
+	cfg, key, ok := d.resolveTenantLLMConfigForRole(ctx, tenantID, platform.RoleCodeDraft)
+	if !ok {
+		return nil
+	}
+	if c, ok := draftClientFor(cfg.Provider, cfg.Model, key, cfg.BaseURL); ok {
+		return d.meter(ctx, c, tenantID)
+	}
+	return nil
+}
+
+// draftClientFor builds the draft model's client. A variable so tests can supply one without a network.
+var draftClientFor = func(provider, model, key, baseURL string) (pentest.SpecLLM, bool) {
+	c, ok := cloudengine.ClientForURL(provider, model, key, baseURL)
+	return c, ok
 }
 
 // operatorAgentLLM is the operator-funded client for ONE resolve. With a factory it is fresh, so its usage
