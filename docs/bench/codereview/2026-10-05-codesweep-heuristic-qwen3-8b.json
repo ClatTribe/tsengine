@@ -1,0 +1,216 @@
+{
+  "tool": "codesweep(heuristic-plan)",
+  "model": "qwen3:8b",
+  "cases": {
+    "GHSA-4x45-gxvp-6283": null,
+    "GHSA-756x-9hf6-q4h4": [
+      {
+        "file": "omnigent/inner/pi_executor.py",
+        "line": 285,
+        "rule": "CWE-338"
+      },
+      {
+        "file": "omnigent/inner/pi_executor.py",
+        "line": 286,
+        "rule": "CWE-338"
+      },
+      {
+        "file": "omnigent/inner/pi_executor.py",
+        "line": 287,
+        "rule": "CWE-338"
+      }
+    ],
+    "GHSA-jjhp-8crj-mppq": [
+      {
+        "file": "src/http-wrapper.ts",
+        "line": 379,
+        "rule": "CWE-78"
+      },
+      {
+        "file": "src/http-wrapper.ts",
+        "line": 381,
+        "rule": "CWE-78"
+      },
+      {
+        "file": "src/http-wrapper.ts",
+        "line": 390,
+        "rule": "CWE-78"
+      },
+      {
+        "file": "src/utils/cleanup-manager.ts",
+        "line": 385,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "src/utils/cleanup-manager.ts",
+        "line": 323,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "src/utils/cleanup-manager.ts",
+        "line": 347,
+        "rule": "CWE-22"
+      }
+    ],
+    "GHSA-m37j-52j7-pjw7": [
+      {
+        "file": "registry/remote/registry.go",
+        "line": 100,
+        "rule": "CWE-918"
+      },
+      {
+        "file": "registry/remote/registry.go",
+        "line": 146,
+        "rule": "CWE-918"
+      },
+      {
+        "file": "registry/remote/retry/policy.go",
+        "line": 21,
+        "rule": "CWE-338"
+      },
+      {
+        "file": "registry/remote/retry/policy.go",
+        "line": 112,
+        "rule": "CWE-338"
+      }
+    ],
+    "GHSA-x5c9-v98j-722r": [
+      {
+        "file": "cli/src/cli/tray/autostart.js",
+        "line": 252,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "cli/src/cli/tray/autostart.js",
+        "line": 285,
+        "rule": "CWE-22"
+      },
+      {
+        "file": "src/mitm/manager.js",
+        "line": 320,
+        "rule": "CWE-295"
+      },
+      {
+        "file": "src/mitm/manager.js",
+        "line": 322,
+        "rule": "CWE-295"
+      },
+      {
+        "file": "src/mitm/manager.js",
+        "line": 324,
+        "rule": "CWE-295"
+      },
+      {
+        "file": "src/mitm/manager.js",
+        "line": 327,
+        "rule": "CWE-295"
+      },
+      {
+        "file": "src/mitm/manager.js",
+        "line": 330,
+        "rule": "CWE-295"
+      },
+      {
+        "file": "src/mitm/manager.js",
+        "line": 331,
+        "rule": "CWE-295"
+      },
+      {
+        "file": "src/mitm/manager.js",
+        "line": 333,
+        "rule": "CWE-295"
+      },
+      {
+        "file": "src/mitm/manager.js",
+        "line": 336,
+        "rule": "CWE-295"
+      },
+      {
+        "file": "src/mitm/manager.js",
+        "line": 339,
+        "rule": "CWE-295"
+      },
+      {
+        "file": "open-sse/translator/formats/gemini.js",
+        "line": 246,
+        "rule": "CWE-338"
+      },
+      {
+        "file": "open-sse/translator/formats/gemini.js",
+        "line": 247,
+        "rule": "CWE-338"
+      },
+      {
+        "file": "open-sse/translator/formats/gemini.js",
+        "line": 256,
+        "rule": "CWE-338"
+      },
+      {
+        "file": "open-sse/translator/formats/gemini.js",
+        "line": 257,
+        "rule": "CWE-338"
+      },
+      {
+        "file": "open-sse/translator/formats/gemini.js",
+        "line": 270,
+        "rule": "CWE-338"
+      },
+      {
+        "file": "open-sse/translator/formats/gemini.js",
+        "line": 316,
+        "rule": "CWE-338"
+      }
+    ]
+  },
+  "ran": {
+    "GHSA-4x45-gxvp-6283": true,
+    "GHSA-756x-9hf6-q4h4": true,
+    "GHSA-jjhp-8crj-mppq": true,
+    "GHSA-m37j-52j7-pjw7": true,
+    "GHSA-x5c9-v98j-722r": true
+  },
+  "examined": {
+    "GHSA-4x45-gxvp-6283": [
+      "packages/cli/src/index.ts",
+      "packages/gitlab/src/cli.ts",
+      "packages/api-client/src/api.ts",
+      "packages/core/mocks/oidc.ts",
+      "examples/storybook-vitest/vite.config.js",
+      "packages/core/src/s3.ts",
+      "examples/remix/app/data.ts",
+      "packages/cli/e2e/utils.js"
+    ],
+    "GHSA-756x-9hf6-q4h4": [
+      "omnigent/inner/pi_executor.py",
+      "omnigent/runner/environment_filesystem.py",
+      "omnigent/llms/adapters/gemini.py",
+      "omnigent/host/connect.py",
+      "omnigent/inner/loader.py",
+      "ap-web/src/lib/identity.ts",
+      "ap-web/src/pages/LoginPage.tsx"
+    ],
+    "GHSA-jjhp-8crj-mppq": [
+      "src/content/content-manager.ts",
+      "src/utils/cleanup-manager.ts",
+      "src/http-wrapper.ts",
+      "src/accounts/account-manager.ts",
+      "src/auth/auth-manager.ts"
+    ],
+    "GHSA-m37j-52j7-pjw7": [
+      "registry/remote/retry/policy.go",
+      "registry/remote/auth/client.go",
+      "registry/remote/registry.go",
+      "registry/remote/repository.go",
+      "content/file/file.go"
+    ],
+    "GHSA-x5c9-v98j-722r": [
+      "cli/src/cli/tray/autostart.js",
+      "src/app/api/cli-tools/cowork-settings/route.js",
+      "src/mitm/manager.js",
+      "src/mitm/server.js",
+      "open-sse/executors/antigravity.js",
+      "open-sse/handlers/chatCore/streamingHandler.js",
+      "open-sse/translator/formats/gemini.js"
+    ]
+  }
+}

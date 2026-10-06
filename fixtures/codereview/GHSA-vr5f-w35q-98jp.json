@@ -1,0 +1,26 @@
+{
+  "id": "GHSA-vr5f-w35q-98jp",
+  "ecosystem": "go",
+  "repo": "perses/perses",
+  "pre_fix_commit": "ae51c3b6dda160d48696a2974cc485f79a0f73ab",
+  "fix_commit": "75e5471040ccb5674ea8d25c2aa16c80ccb70b2a",
+  "published_at": "2026-09-18",
+  "severity": "high",
+  "cwes": [
+    "CWE-22"
+  ],
+  "summary": "Perses's unvalidated project parameter enables filesystem path traversal",
+  "source": "https://github.com/advisories/GHSA-vr5f-w35q-98jp",
+  "golden": [
+    {
+      "file": "internal/api/toolbox/list.go",
+      "start": 25,
+      "end": 25
+    },
+    {
+      "file": "internal/api/toolbox/list.go",
+      "start": 47,
+      "end": 47
+    }
+  ]
+}

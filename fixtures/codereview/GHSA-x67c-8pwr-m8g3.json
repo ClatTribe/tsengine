@@ -1,0 +1,47 @@
+{
+  "id": "GHSA-x67c-8pwr-m8g3",
+  "ecosystem": "go",
+  "repo": "siyuan-note/siyuan",
+  "pre_fix_commit": "0e54db67fb95ad2ce4d7b1f0f6238173a9395be1",
+  "fix_commit": "0a176345e02a0d19bdc7762e50e0b92002087d20",
+  "published_at": "2026-09-03",
+  "severity": "high",
+  "cwes": [
+    "CWE-89",
+    "CWE-1336"
+  ],
+  "summary": "SiYuan: Second-order SSTI to arbitrary SQL via attribute-view template column (queryBlocks): malicious imported package executes SQL on victim kernel",
+  "source": "https://github.com/advisories/GHSA-x67c-8pwr-m8g3",
+  "golden": [
+    {
+      "file": "kernel/model/template.go",
+      "start": 327,
+      "end": 328
+    },
+    {
+      "file": "kernel/model/template.go",
+      "start": 345,
+      "end": 345
+    },
+    {
+      "file": "kernel/sql/database.go",
+      "start": 1780,
+      "end": 1780
+    },
+    {
+      "file": "kernel/sql/database.go",
+      "start": 1784,
+      "end": 1784
+    },
+    {
+      "file": "kernel/sql/database.go",
+      "start": 1802,
+      "end": 1802
+    },
+    {
+      "file": "kernel/sql/database.go",
+      "start": 1807,
+      "end": 1807
+    }
+  ]
+}

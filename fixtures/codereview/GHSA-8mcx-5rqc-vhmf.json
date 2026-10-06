@@ -1,0 +1,36 @@
+{
+  "id": "GHSA-8mcx-5rqc-vhmf",
+  "ecosystem": "pip",
+  "repo": "jelmer/dulwich",
+  "pre_fix_commit": "d55b456efc7f5d31091388e853de01749e6e0933",
+  "fix_commit": "4ca77f9f470742ba246cd6fa07beb6d735045664",
+  "published_at": "2026-10-02",
+  "severity": "high",
+  "cwes": [
+    "CWE-22"
+  ],
+  "summary": "Dulwich: Arbitrary File Write (RCE) on Windows via Unvalidated Drive Letters in Tree Paths",
+  "source": "https://github.com/advisories/GHSA-8mcx-5rqc-vhmf",
+  "golden": [
+    {
+      "file": "dulwich/index.py",
+      "start": 2077,
+      "end": 2077
+    },
+    {
+      "file": "dulwich/index.py",
+      "start": 2175,
+      "end": 2175
+    },
+    {
+      "file": "dulwich/porcelain/__init__.py",
+      "start": 630,
+      "end": 630
+    },
+    {
+      "file": "dulwich/porcelain/__init__.py",
+      "start": 636,
+      "end": 638
+    }
+  ]
+}

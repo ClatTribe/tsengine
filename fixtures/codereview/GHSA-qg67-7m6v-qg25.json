@@ -1,0 +1,21 @@
+{
+  "id": "GHSA-qg67-7m6v-qg25",
+  "ecosystem": "go",
+  "repo": "project-zot/zot",
+  "pre_fix_commit": "5f0263d334fbcc383b4d85f52c67cba338cc297b",
+  "fix_commit": "7bb211bcd4352b90f3e99752607fbd1f050bf7ca",
+  "published_at": "2026-09-18",
+  "severity": "high",
+  "cwes": [
+    "CWE-285"
+  ],
+  "summary": "zot: Bearer authentication maps DELETE to push scope, allowing unauthorized deletion",
+  "source": "https://github.com/advisories/GHSA-qg67-7m6v-qg25",
+  "golden": [
+    {
+      "file": "pkg/api/authn.go",
+      "start": 607,
+      "end": 609
+    }
+  ]
+}

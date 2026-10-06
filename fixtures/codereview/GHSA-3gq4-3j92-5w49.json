@@ -1,0 +1,36 @@
+{
+  "id": "GHSA-3gq4-3j92-5w49",
+  "ecosystem": "pip",
+  "repo": "nltk/nltk",
+  "pre_fix_commit": "10d34b3f4fe3fec74b76527a409eb0acbac2e8ab",
+  "fix_commit": "bc007200d123c1a98d74c2eb230f5e06c53886b8",
+  "published_at": "2026-09-08",
+  "severity": "high",
+  "cwes": [
+    "CWE-73"
+  ],
+  "summary": "NLTK: Corpus Reader Sandbox Bypass",
+  "source": "https://github.com/advisories/GHSA-3gq4-3j92-5w49",
+  "golden": [
+    {
+      "file": "nltk/corpus/reader/api.py",
+      "start": 17,
+      "end": 17
+    },
+    {
+      "file": "nltk/corpus/reader/api.py",
+      "start": 72,
+      "end": 72
+    },
+    {
+      "file": "nltk/corpus/reader/panlex_lite.py",
+      "start": 46,
+      "end": 46
+    },
+    {
+      "file": "nltk/corpus/reader/util.py",
+      "start": 714,
+      "end": 714
+    }
+  ]
+}

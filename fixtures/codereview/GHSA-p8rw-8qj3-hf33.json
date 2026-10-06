@@ -1,0 +1,36 @@
+{
+  "id": "GHSA-p8rw-8qj3-hf33",
+  "ecosystem": "pip",
+  "repo": "omnigent-ai/omnigent",
+  "pre_fix_commit": "b18dab9dff4f3b7e01e7359984d7af51caf8b88c",
+  "fix_commit": "7ca0cca3c9a65c04c489edf68f0e080424a26868",
+  "published_at": "2026-09-02",
+  "severity": "high",
+  "cwes": [
+    "CWE-22"
+  ],
+  "summary": "Omnigent: Unvalidated os_env.cwd in agent bundle yields arbitrary host filesystem access on runners without OMNIGENT_RUNNER_WORKSPACE",
+  "source": "https://github.com/advisories/GHSA-p8rw-8qj3-hf33",
+  "golden": [
+    {
+      "file": "omnigent/server/bundles.py",
+      "start": 7,
+      "end": 7
+    },
+    {
+      "file": "omnigent/server/bundles.py",
+      "start": 12,
+      "end": 12
+    },
+    {
+      "file": "omnigent/server/bundles.py",
+      "start": 46,
+      "end": 46
+    },
+    {
+      "file": "omnigent/server/bundles.py",
+      "start": 73,
+      "end": 73
+    }
+  ]
+}

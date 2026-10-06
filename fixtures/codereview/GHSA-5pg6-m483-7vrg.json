@@ -1,0 +1,21 @@
+{
+  "id": "GHSA-5pg6-m483-7vrg",
+  "ecosystem": "go",
+  "repo": "go-vikunja/vikunja",
+  "pre_fix_commit": "37c35c64fb9b58b79475bc1fe971a46921c7ab24",
+  "fix_commit": "36cdc2ce2be0b8ccc74227d178b92047d59cd65f",
+  "published_at": "2026-08-28",
+  "severity": "high",
+  "cwes": [
+    "CWE-639"
+  ],
+  "summary": "Vikunja has cross-tenant IDOR in kanban move-task endpoint via unauthorized body task_id",
+  "source": "https://github.com/advisories/GHSA-5pg6-m483-7vrg",
+  "golden": [
+    {
+      "file": "pkg/models/kanban_task_bucket.go",
+      "start": 59,
+      "end": 59
+    }
+  ]
+}

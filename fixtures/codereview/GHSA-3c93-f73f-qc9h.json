@@ -1,0 +1,32 @@
+{
+  "id": "GHSA-3c93-f73f-qc9h",
+  "ecosystem": "pip",
+  "repo": "python-social-auth/social-core",
+  "pre_fix_commit": "c0d07898675a895a5888feb3c57222b22c932201",
+  "fix_commit": "1bfacdd0379e5eb46e169a99ab648b835e9bb6a2",
+  "published_at": "2026-09-24",
+  "severity": "high",
+  "cwes": [
+    "CWE-287",
+    "CWE-347"
+  ],
+  "summary": "social-auth-core: VK App backend accepts unsigned callback data when auth_key is missing",
+  "source": "https://github.com/advisories/GHSA-3c93-f73f-qc9h",
+  "golden": [
+    {
+      "file": "social_core/backends/vk.py",
+      "start": 13,
+      "end": 13
+    },
+    {
+      "file": "social_core/backends/vk.py",
+      "start": 187,
+      "end": 187
+    },
+    {
+      "file": "social_core/backends/vk.py",
+      "start": 189,
+      "end": 192
+    }
+  ]
+}

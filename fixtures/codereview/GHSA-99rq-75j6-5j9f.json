@@ -1,0 +1,106 @@
+{
+  "id": "GHSA-99rq-75j6-5j9f",
+  "ecosystem": "go",
+  "repo": "siyuan-note/siyuan",
+  "pre_fix_commit": "ffa471f1b1e237a1a1d565722bf69d345e35c614",
+  "fix_commit": "f08dee71ba8e087a395d74f121de11e6a997ef14",
+  "published_at": "2026-09-03",
+  "severity": "high",
+  "cwes": [
+    "CWE-79"
+  ],
+  "summary": "SiYuan: Stored and reflected XSS in SiYuan through an SVG sanitizer bypass",
+  "source": "https://github.com/advisories/GHSA-99rq-75j6-5j9f",
+  "golden": [
+    {
+      "file": "kernel/api/icon.go",
+      "start": 20,
+      "end": 20
+    },
+    {
+      "file": "kernel/api/icon.go",
+      "start": 169,
+      "end": 169
+    },
+    {
+      "file": "kernel/api/icon.go",
+      "start": 172,
+      "end": 172
+    },
+    {
+      "file": "kernel/api/icon.go",
+      "start": 579,
+      "end": 579
+    },
+    {
+      "file": "kernel/api/icon.go",
+      "start": 585,
+      "end": 585
+    },
+    {
+      "file": "kernel/server/serve.go",
+      "start": 793,
+      "end": 793
+    },
+    {
+      "file": "kernel/server/serve.go",
+      "start": 795,
+      "end": 795
+    },
+    {
+      "file": "kernel/util/misc.go",
+      "start": 21,
+      "end": 22
+    },
+    {
+      "file": "kernel/util/misc.go",
+      "start": 32,
+      "end": 32
+    },
+    {
+      "file": "kernel/util/misc.go",
+      "start": 319,
+      "end": 325
+    },
+    {
+      "file": "kernel/util/misc.go",
+      "start": 327,
+      "end": 343
+    },
+    {
+      "file": "kernel/util/misc.go",
+      "start": 345,
+      "end": 401
+    },
+    {
+      "file": "kernel/util/misc.go",
+      "start": 404,
+      "end": 406
+    },
+    {
+      "file": "kernel/util/misc.go",
+      "start": 409,
+      "end": 409
+    },
+    {
+      "file": "kernel/util/misc.go",
+      "start": 413,
+      "end": 421
+    },
+    {
+      "file": "kernel/util/misc.go",
+      "start": 423,
+      "end": 424
+    },
+    {
+      "file": "kernel/util/misc.go",
+      "start": 427,
+      "end": 431
+    },
+    {
+      "file": "kernel/util/misc.go",
+      "start": 433,
+      "end": 433
+    }
+  ]
+}

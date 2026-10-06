@@ -1,0 +1,76 @@
+{
+  "id": "GHSA-x8gv-g2g3-65fj",
+  "ecosystem": "go",
+  "repo": "siyuan-note/siyuan",
+  "pre_fix_commit": "b26a4a307b8ae5067387ea76ce1fad6b7f4bf9e7",
+  "fix_commit": "dd2778b70d020b15491ef7418f5f63214583cd63",
+  "published_at": "2026-10-02",
+  "severity": "high",
+  "cwes": [
+    "CWE-918"
+  ],
+  "summary": "SiYuan Agent Tools SSRF via DNS-Rebinding TOCTOU (Bypass of CheckHostSSRF)",
+  "source": "https://github.com/advisories/GHSA-x8gv-g2g3-65fj",
+  "golden": [
+    {
+      "file": "kernel/util/httprequest.go",
+      "start": 23,
+      "end": 23
+    },
+    {
+      "file": "kernel/util/httprequest.go",
+      "start": 27,
+      "end": 27
+    },
+    {
+      "file": "kernel/util/httprequest.go",
+      "start": 29,
+      "end": 29
+    },
+    {
+      "file": "kernel/util/httprequest.go",
+      "start": 55,
+      "end": 55
+    },
+    {
+      "file": "kernel/util/httprequest.go",
+      "start": 78,
+      "end": 81
+    },
+    {
+      "file": "kernel/util/httprequest.go",
+      "start": 83,
+      "end": 83
+    },
+    {
+      "file": "kernel/util/httprequest.go",
+      "start": 86,
+      "end": 86
+    },
+    {
+      "file": "kernel/util/httprequest.go",
+      "start": 129,
+      "end": 146
+    },
+    {
+      "file": "kernel/util/net.go",
+      "start": 19,
+      "end": 19
+    },
+    {
+      "file": "kernel/util/net.go",
+      "start": 171,
+      "end": 171
+    },
+    {
+      "file": "kernel/util/webfetch.go",
+      "start": 32,
+      "end": 32
+    },
+    {
+      "file": "kernel/util/webfetch.go",
+      "start": 54,
+      "end": 54
+    }
+  ]
+}

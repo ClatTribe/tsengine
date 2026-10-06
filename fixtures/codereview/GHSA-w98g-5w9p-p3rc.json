@@ -1,0 +1,41 @@
+{
+  "id": "GHSA-w98g-5w9p-p3rc",
+  "ecosystem": "go",
+  "repo": "maximhq/bifrost",
+  "pre_fix_commit": "9dda29f586ff8c989c03264aedfbb6914b00fbad",
+  "fix_commit": "54ec431fc5255ff42c36420d88549477e0b33d89",
+  "published_at": "2026-08-28",
+  "severity": "high",
+  "cwes": [
+    "CWE-918"
+  ],
+  "summary": "Bifrost's SSRF deny-list is incomplete: isPublicIP permits CGNAT, IPv6 6to4/NAT64, and site-local in FetchAndEncodeURL",
+  "source": "https://github.com/advisories/GHSA-w98g-5w9p-p3rc",
+  "golden": [
+    {
+      "file": "core/providers/utils/fetch.go",
+      "start": 24,
+      "end": 26
+    },
+    {
+      "file": "core/providers/utils/fetch.go",
+      "start": 105,
+      "end": 106
+    },
+    {
+      "file": "core/providers/utils/fetch.go",
+      "start": 113,
+      "end": 114
+    },
+    {
+      "file": "core/providers/utils/fetch.go",
+      "start": 116,
+      "end": 116
+    },
+    {
+      "file": "core/providers/utils/fetch.go",
+      "start": 118,
+      "end": 118
+    }
+  ]
+}

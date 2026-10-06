@@ -1,0 +1,27 @@
+{
+  "id": "GHSA-m37j-52j7-pjw7",
+  "ecosystem": "go",
+  "repo": "oras-project/oras-go",
+  "pre_fix_commit": "948a1dc4bd97da078a4f5f1a833d3e06d33793d6",
+  "fix_commit": "adab2f25ea95ef4e6e41f50db9266a6701399422",
+  "published_at": "2026-09-17",
+  "severity": "high",
+  "cwes": [
+    "CWE-22",
+    "CWE-59"
+  ],
+  "summary": "oras-go: Arbitrary file write outside file.Store root via symlink-chain bypass in tar extraction (pushDir)",
+  "source": "https://github.com/advisories/GHSA-m37j-52j7-pjw7",
+  "golden": [
+    {
+      "file": "content/file/utils.go",
+      "start": 177,
+      "end": 177
+    },
+    {
+      "file": "content/file/utils.go",
+      "start": 283,
+      "end": 283
+    }
+  ]
+}

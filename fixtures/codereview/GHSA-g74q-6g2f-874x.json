@@ -1,0 +1,106 @@
+{
+  "id": "GHSA-g74q-6g2f-874x",
+  "ecosystem": "npm",
+  "repo": "tinacms/tinacms",
+  "pre_fix_commit": "c2c03c677f67b6fd3a2155d5227b9bf785b43288",
+  "fix_commit": "0a927a4f8d228dd05ee7ca4be32899bc190e73af",
+  "published_at": "2026-09-17",
+  "severity": "high",
+  "cwes": [
+    "CWE-639"
+  ],
+  "summary": "Tina: [Broken Access Control] letting any TinaCloud user authorize against any self-hosted site",
+  "source": "https://github.com/advisories/GHSA-g74q-6g2f-874x",
+  "golden": [
+    {
+      "file": "packages/@tinacms/auth/src/index.ts",
+      "start": 53,
+      "end": 53
+    },
+    {
+      "file": "packages/@tinacms/auth/src/index.ts",
+      "start": 68,
+      "end": 68
+    },
+    {
+      "file": "packages/@tinacms/auth/src/index.ts",
+      "start": 72,
+      "end": 72
+    },
+    {
+      "file": "packages/@tinacms/auth/src/index.ts",
+      "start": 74,
+      "end": 74
+    },
+    {
+      "file": "packages/@tinacms/auth/src/index.ts",
+      "start": 76,
+      "end": 77
+    },
+    {
+      "file": "packages/@tinacms/auth/src/index.ts",
+      "start": 79,
+      "end": 83
+    },
+    {
+      "file": "packages/@tinacms/auth/src/index.ts",
+      "start": 87,
+      "end": 87
+    },
+    {
+      "file": "packages/@tinacms/auth/src/index.ts",
+      "start": 98,
+      "end": 98
+    },
+    {
+      "file": "packages/@tinacms/auth/src/index.ts",
+      "start": 113,
+      "end": 113
+    },
+    {
+      "file": "packages/@tinacms/auth/src/index.ts",
+      "start": 118,
+      "end": 118
+    },
+    {
+      "file": "packages/@tinacms/auth/src/index.ts",
+      "start": 121,
+      "end": 121
+    },
+    {
+      "file": "packages/@tinacms/cli/src/cmds/init/prompts/authProvider.ts",
+      "start": 17,
+      "end": 17
+    },
+    {
+      "file": "packages/next-tinacms-azure/src/auth.ts",
+      "start": 35,
+      "end": 35
+    },
+    {
+      "file": "packages/next-tinacms-azure/src/auth.ts",
+      "start": 37,
+      "end": 37
+    },
+    {
+      "file": "packages/next-tinacms-azure/src/auth.ts",
+      "start": 39,
+      "end": 40
+    },
+    {
+      "file": "packages/next-tinacms-azure/src/auth.ts",
+      "start": 42,
+      "end": 46
+    },
+    {
+      "file": "packages/next-tinacms-azure/src/auth.ts",
+      "start": 50,
+      "end": 50
+    },
+    {
+      "file": "vitest.config.ts",
+      "start": 3,
+      "end": 3
+    }
+  ]
+}
