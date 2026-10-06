@@ -34,7 +34,7 @@ import (
 // scored on the same key.
 func codereviewCmd(argv []string) error {
 	if len(argv) == 0 {
-		return errors.New("usage: tsbench codereview build|run|score [flags]")
+		return errors.New("usage: tsbench codereview build|run|score|cost-quality [flags]")
 	}
 	switch argv[0] {
 	case "build":
@@ -43,8 +43,10 @@ func codereviewCmd(argv []string) error {
 		return codereviewRun(argv[1:])
 	case "score":
 		return codereviewScore(argv[1:])
+	case "cost-quality":
+		return codereviewCostQuality(argv[1:])
 	}
-	return fmt.Errorf("unknown codereview step %q (build|run|score)", argv[0])
+	return fmt.Errorf("unknown codereview step %q (build|run|score|cost-quality)", argv[0])
 }
 
 func codereviewBuild(argv []string) error {
@@ -394,4 +396,91 @@ func deepsecPredictions(cases []codereviewbench.Case, dir string) (codereviewben
 		p.Ran[c.ID] = true
 	}
 	return p, nil
+}
+
+// codereviewCostQuality builds the cost-vs-quality table from predictions files already written by
+// `run`. Each --arm is "Label=file1.json,file2.json,…": the files are repeats of ONE model, so the
+// table can show spread. Model-free and deterministic — it only reads the committed predictions and
+// the public corpus, so the number is re-gradable by anyone (the property the "17 vs 15" claim lacked).
+func codereviewCostQuality(argv []string) error {
+	fs := flag.NewFlagSet("codereview cost-quality", flag.ContinueOnError)
+	corpusDir := fs.String("corpus", "fixtures/codereview", "case directory")
+	tol := fs.Int("tolerance", codereviewbench.DefaultTolerance, "lines either side of a fixed line that still count")
+	cutoff := fs.String("cutoff", "", "model training cutoff YYYY-MM-DD — reports how many cases were published after it")
+	out := fs.String("out", "", "also write the markdown table here")
+	asJSON := fs.Bool("json", false, "print the comparison as JSON")
+	var armSpecs multiFlag
+	fs.Var(&armSpecs, "arm", "an arm as Label=preds1.json,preds2.json (repeatable; the files are repeats of one model)")
+	if err := fs.Parse(argv); err != nil {
+		return err
+	}
+	if len(armSpecs) == 0 {
+		return errors.New("at least one --arm is required (e.g. --arm 'qwen3:8b=run1.json,run2.json')")
+	}
+	cases, err := codereviewbench.Load(*corpusDir)
+	if err != nil {
+		return err
+	}
+	var arms []codereviewbench.Arm
+	for _, spec := range armSpecs {
+		label, files, ferr := parseArm(spec)
+		if ferr != nil {
+			return ferr
+		}
+		var runs []codereviewbench.Predictions
+		for _, f := range files {
+			raw, rerr := os.ReadFile(f) //nolint:gosec // operator-supplied predictions path
+			if rerr != nil {
+				return rerr
+			}
+			var p codereviewbench.Predictions
+			if jerr := json.Unmarshal(raw, &p); jerr != nil {
+				return fmt.Errorf("%s: %w", f, jerr)
+			}
+			runs = append(runs, p)
+		}
+		arms = append(arms, codereviewbench.Arm{Label: label, Runs: runs})
+	}
+	cmp, err := codereviewbench.Aggregate(cases, arms, *tol, *cutoff)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		b, _ := json.MarshalIndent(cmp, "", "  ")
+		fmt.Println(string(b))
+	} else {
+		fmt.Print(codereviewbench.RenderComparison(cmp))
+	}
+	if *out != "" {
+		return os.WriteFile(*out, []byte(codereviewbench.RenderComparison(cmp)), 0o600)
+	}
+	return nil
+}
+
+// parseArm splits "Label=file1,file2" into its label and files.
+func parseArm(spec string) (string, []string, error) {
+	i := strings.Index(spec, "=")
+	if i <= 0 {
+		return "", nil, fmt.Errorf("arm %q must be Label=file1.json,file2.json", spec)
+	}
+	label := strings.TrimSpace(spec[:i])
+	var files []string
+	for _, f := range strings.Split(spec[i+1:], ",") {
+		if f = strings.TrimSpace(f); f != "" {
+			files = append(files, f)
+		}
+	}
+	if label == "" || len(files) == 0 {
+		return "", nil, fmt.Errorf("arm %q must be Label=file1.json,file2.json", spec)
+	}
+	return label, files, nil
+}
+
+// multiFlag collects a repeatable string flag.
+type multiFlag []string
+
+func (m *multiFlag) String() string { return strings.Join(*m, " ") }
+func (m *multiFlag) Set(v string) error {
+	*m = append(*m, v)
+	return nil
 }

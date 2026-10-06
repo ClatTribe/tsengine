@@ -34,3 +34,32 @@ taken before anything was tuned to it.
 
 **Next measurements** (each recorded here, unchanged, before any fix): the LLM localizer (the product's
 configuration) on the same 5; all 26 cases; a frontier model; deepsec scored from its own export.
+
+## 2026-10-06 — cost-vs-quality (`tsbench codereview cost-quality`)
+
+The first comparison across configurations, on the free local model (qwen3:8b). The committed table is
+`COST-QUALITY.md`; both predictions files are beside it, so the numbers re-grade with:
+
+```bash
+go run ./cmd/tsbench codereview cost-quality --corpus fixtures/codereview \
+  --arm "LLM-plan=docs/bench/codereview/2026-10-05-codesweep-llmplan-qwen3-8b.json" \
+  --arm "heuristic-plan=docs/bench/codereview/2026-10-05-codesweep-heuristic-qwen3-8b.json"
+```
+
+**The finding: the LLM planner fixed coverage; the small model is now the bottleneck.** The heuristic
+planner showed the model a vulnerable file in **0 of 5** cases; the product's LLM planner showed it in
+**3 of 4**. So the 0% recall in the earlier run was a planning failure, and the LLM planner largely
+closes it. But recall is **still 0%** — in both cases where qwen3:8b was shown the vulnerable file
+(jjhp, m37j) it flagged *other* files instead (verified: the predicted files and the key files are
+disjoint, so this is a real miss, not a path-matching artefact). On an 8B local model, detection is the
+wall once coverage is solved.
+
+**What this does NOT yet say, and needs a key + a cap to answer:** whether a frontier model, now shown
+the right file, actually finds the bug. That is the row that decides whether cheap-model routing is
+viable for code review, and it is the whole point of the table. Cost is "unknown" for both rows because
+qwen3:8b has no published price (not $0 — it is self-hosted/free, but these predictions files predate
+the self-hosted-cost flag; a fresh run would mark them free).
+
+**Next**, each recorded here before any model is chosen (once chosen, the corpus is no longer held out
+for that choice — §14.2 rule 5): repeat the local arm ≥3× for spread; add a mid-price and a frontier
+arm; report cost per correct finding across the tiers.
