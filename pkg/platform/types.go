@@ -1019,10 +1019,24 @@ const (
 	RoleAnalysis AgentRole = "analysis"
 	// RoleCode — patch generation, exploitation, code and spec reasoning.
 	RoleCode AgentRole = "code"
+	// RoleCodeDraft — an OPTIONAL cheaper model that drafts a code fix FIRST, used only where the draft
+	// can be checked by executing the customer's tests (platformapi.PatchForAction). A draft the tests
+	// reject, or no draft at all, falls through to the RoleCode model. Unlike the other roles it has NO
+	// fallback: unset means no cascade, never "draft with the default model".
+	RoleCodeDraft AgentRole = "code_draft"
 )
 
 // AgentRoles is the closed set, for validation and for the settings UI.
-func AgentRoles() []AgentRole { return []AgentRole{RoleAnalysis, RoleCode} }
+func AgentRoles() []AgentRole { return []AgentRole{RoleAnalysis, RoleCode, RoleCodeDraft} }
+
+// DraftLLM returns the explicitly configured draft model, or nil. Deliberately NO fallback to the
+// tenant default: a cascade whose draft and escalation are the same model spends twice for one answer.
+func (t Tenant) DraftLLM() *LLMConfig {
+	if c, ok := t.LLMRoles[RoleCodeDraft]; ok && c.Usable() {
+		return c
+	}
+	return nil
+}
 
 // ValidAgentRole reports whether s names a known role.
 func ValidAgentRole(s string) bool {
@@ -2410,6 +2424,10 @@ type AISpend struct {
 	// rather than for a whole run. Both count toward the monthly ceiling; the value view counts them as
 	// calls, not runs, because a code sweep making two hundred calls did not run two hundred times.
 	PerCall bool `json:"per_call,omitempty"`
+	// ActionID ties a call to the remediation Action it was spent producing (the code-fix patch). It is
+	// what lets a fix the re-test later proves closed be weighed against what writing it cost — and a
+	// fix that did NOT close against the same spend, so a cost per proven fix counts the failures too.
+	ActionID string `json:"action_id,omitempty"`
 	// SelfHosted marks a run served by the tenant's OWN self-hosted model (Ollama / an OpenAI-compatible
 	// endpoint they run). Such a run costs nothing and is recorded at $0 with the cost KNOWN — not unknown,
 	// and not priced: the default rate for an unpriced model is right for a frontier model reached through

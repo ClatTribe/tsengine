@@ -42,12 +42,19 @@ func meteredRun(ctx context.Context) context.Context {
 
 type aiKindKey struct{}
 
-type aiKindLabel struct{ kind, surface string }
+type aiKindLabel struct{ kind, surface, actionID string }
 
 // aiKind labels the calls made under ctx for the spend record. Optional: an unlabelled call is still
 // recorded, as "model call" on surface "other" — labelling is for the value view, metering is not.
 func aiKind(ctx context.Context, kind, surface string) context.Context {
 	return context.WithValue(ctx, aiKindKey{}, aiKindLabel{kind: kind, surface: surface})
+}
+
+// aiKindForAction is aiKind for calls spent producing one remediation Action. The rows carry the action's
+// id, so when a re-test later proves that fix closed (or not), the outcome can be weighed against what it
+// cost (aivalue.go).
+func aiKindForAction(ctx context.Context, kind, surface, actionID string) context.Context {
+	return context.WithValue(ctx, aiKindKey{}, aiKindLabel{kind: kind, surface: surface, actionID: actionID})
 }
 
 type spendMeter struct {
@@ -107,7 +114,7 @@ func (m *spendMeter) record(ctx context.Context) {
 	}
 	e := platform.AISpend{
 		ID: spendID(), TenantID: m.tenantID, At: time.Now().UTC(), Kind: label.kind, Surface: label.surface,
-		Model: m.ModelName(), PerCall: true,
+		Model: m.ModelName(), PerCall: true, ActionID: label.actionID,
 	}
 	if delta.Total() > 0 {
 		e.USD, e.CostKnown = cloudengine.EstimateCost(e.Model, delta), true
