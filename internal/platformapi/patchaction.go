@@ -28,7 +28,7 @@ import (
 // a test that fails before and passes after is the strongest evidence a PR can carry that the fix
 // is real, and the reviewer is told when there is none.
 func (d Deps) PatchForAction(ctx context.Context, a platform.Action, c platform.Connection, token string) (map[string]string, string, error) {
-	llm := d.resolveAgentLLMForRole(aiKind(ctx, "fix patch", "code"), a.TenantID, platform.RoleCode)
+	llm := d.resolveAgentLLMForRole(aiKindForAction(ctx, "fix patch", "code", a.ID), a.TenantID, platform.RoleCode)
 	if llm == nil {
 		return nil, "", fmt.Errorf("no AI model is configured for this workspace, so the engineer could not write the patch (Settings → AI model)")
 	}

@@ -180,29 +180,110 @@ func TestMeter_CloudRunIsOneRow(t *testing.T) {
 	}
 }
 
-// Calls are spend but not runs; an unpriced call withholds cost-per-proof like an unpriced run does.
+// Calls are spend but not runs. A call that produces no outcome (the sweep's candidates) is NOT in the
+// cost-per-proven-finding numerator — only runs can verify a finding — so it neither inflates that figure
+// nor, when unpriced, withholds it. It is reported as its own number instead of disappearing.
 func TestAIValue_CallsAreCountedApartFromRuns(t *testing.T) {
 	ctx := context.Background()
-	d, st := meterDeps(t, "t1")
+	d, _ := meterDeps(t, "t1")
 	d.Connectors, d.Token = connector.NewRegistry(), "platform-tok"
 	d.recordAISpend(ctx, "t1", "code", "code", 1.0, true, meterModel, 2)
 	d.putSpend(ctx, platform.AISpend{ID: spendID(), TenantID: "t1", At: nowUTC(), Kind: "code sweep", Surface: "code", USD: 0.5, CostKnown: true, PerCall: true})
 	d.putSpend(ctx, platform.AISpend{ID: spendID(), TenantID: "t1", At: nowUTC(), Kind: "code sweep", Surface: "code", PerCall: true})
 
-	var v aiValueView
-	_ = json.Unmarshal(do(NewHandler(d), "GET", "/v1/ai-value", "t1", "").Body.Bytes(), &v)
-	if len(v.Surfaces) != 1 {
-		t.Fatalf("%+v", v)
-	}
-	s := v.Surfaces[0]
-	if s.Runs != 1 || s.Calls != 2 || s.UnknownCostCalls != 1 || !near(s.USD, 1.5) {
+	s := aiValueSurface(t, d, "code")
+	if s.Runs != 1 || s.Calls != 2 || s.UnknownCostCalls != 1 || !near(s.USD, 1.5) || !near(s.NoOutcomeUSD, 0.5) {
 		t.Errorf("surface: %+v", s)
 	}
-	if s.CostPerVerified != nil {
-		t.Error("an unpriced call must withhold cost-per-proof — the cost shown is partial")
+	if s.CostPerVerified == nil || !near(*s.CostPerVerified, 0.5) {
+		t.Errorf("cost per proven finding must be the RUN's spend over its proofs (1.00/2), not all spend: %+v", s.CostPerVerified)
 	}
-	_ = st
+	// An unpriced RUN still withholds it: then the numerator itself is partial.
+	d.putSpend(ctx, platform.AISpend{ID: spendID(), TenantID: "t1", At: nowUTC(), Kind: "code", Surface: "code", Verified: 1})
+	if s := aiValueSurface(t, d, "code"); s.CostPerVerified != nil {
+		t.Error("an unpriced run must withhold cost-per-proven-finding")
+	}
 }
+
+func aiValueSurface(t *testing.T, d Deps, surface string) surfaceValue {
+	t.Helper()
+	var v aiValueView
+	_ = json.Unmarshal(do(NewHandler(d), "GET", "/v1/ai-value", "t1", "").Body.Bytes(), &v)
+	for _, s := range v.Surfaces {
+		if s.Surface == surface {
+			return s
+		}
+	}
+	t.Fatalf("no %q surface in %+v", surface, v)
+	return surfaceValue{}
+}
+
+// A fix the AI wrote is weighed against what writing it cost — and the fixes that did NOT close count in
+// the cost too, so the figure is the price of a proven fix, not the price of the successes alone.
+func TestAIValue_CostPerProvenFixCountsTheFailures(t *testing.T) {
+	ctx := context.Background()
+	d, st := meterDeps(t, "t1")
+	d.Connectors, d.Token = connector.NewRegistry(), "platform-tok"
+	fix := func(action string, usd float64, known bool) {
+		d.putSpend(ctx, platform.AISpend{ID: spendID(), TenantID: "t1", At: nowUTC(), Kind: "fix patch", Surface: "code",
+			USD: usd, CostKnown: known, PerCall: true, ActionID: action})
+	}
+	fix("a-closed", 0.40, true)
+	fix("a-failed", 0.60, true)
+	fix("a-pending", 0.20, true)
+	_ = st.PutAction(ctx, platform.Action{ID: "a-closed", TenantID: "t1", Status: platform.ActApplied, Verification: &platform.FixVerification{Status: platform.FixStatusFixed}})
+	_ = st.PutAction(ctx, platform.Action{ID: "a-failed", TenantID: "t1", Status: platform.ActApplied, Verification: &platform.FixVerification{Status: platform.FixStatusStillPresent}})
+	_ = st.PutAction(ctx, platform.Action{ID: "a-pending", TenantID: "t1", Status: platform.ActApplied})
+
+	s := aiValueSurface(t, d, "code")
+	if s.FixesAttempted != 3 || s.VerifiedFixes != 1 {
+		t.Fatalf("attempted/verified: %+v", s)
+	}
+	if s.CostPerVerifiedFix == nil || !near(*s.CostPerVerifiedFix, 1.20) {
+		t.Fatalf("cost per proven fix must be ALL fix spend (1.20) over the one proven fix: %v", s.CostPerVerifiedFix)
+	}
+	if s.NoOutcomeUSD != 0 {
+		t.Errorf("fix spend has an outcome and must not be counted as no-outcome: %+v", s)
+	}
+	// One unpriced fix call: the numerator is partial, so the figure is withheld.
+	fix("a-closed", 0, false)
+	if s := aiValueSurface(t, d, "code"); s.CostPerVerifiedFix != nil {
+		t.Error("an unpriced fix call must withhold cost-per-proven-fix")
+	}
+}
+
+// WIRING: the delivery-time patcher's calls carry the action they were spent on. Without this the fix
+// columns are always zero and the view quietly reports that the AI never wrote a fix.
+func TestPatchForAction_SpendCarriesTheAction(t *testing.T) {
+	llm := &patchLLMUsage{patchLLM: &patchLLM{}}
+	d, a, c := patchDeps(t, nil)
+	d.AgentLLM = llm
+	if _, _, err := d.PatchForAction(context.Background(), a, c, "gh-token"); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := d.Store.ListAISpend(context.Background(), "t1")
+	if len(rows) == 0 {
+		t.Fatal("the patcher's model calls were not recorded")
+	}
+	for _, r := range rows {
+		if r.ActionID != a.ID || r.Kind != "fix patch" {
+			t.Errorf("row not tied to the action it was spent producing: %+v", r)
+		}
+	}
+}
+
+// patchLLMUsage is patchLLM that reports usage, as the real clients do.
+type patchLLMUsage struct {
+	*patchLLM
+	n int64
+}
+
+func (p *patchLLMUsage) Generate(ctx context.Context, prompt string) (string, error) {
+	p.n += 1000
+	return p.patchLLM.Generate(ctx, prompt)
+}
+func (p *patchLLMUsage) TotalUsage() cloudengine.Usage { return cloudengine.Usage{InputTokens: p.n} }
+func (p *patchLLMUsage) ModelName() string             { return meterModel }
 
 // The other self-priced entry points: each run is one row, never one plus a row per call.
 func TestMeter_EverySelfPricedRunIsOneRow(t *testing.T) {
@@ -246,4 +327,23 @@ func TestMeter_EverySelfPricedRunIsOneRow(t *testing.T) {
 		}
 		check(t, st, "code")
 	})
+}
+
+// A fix written entirely on the tenant's own self-hosted model costs a KNOWN $0 (#1533), and that is a
+// real price: the cost per proven fix is shown as $0.00, not withheld as if it were unknown. Withholding
+// it would hide exactly the saving a free draft model exists to deliver.
+func TestAIValue_SelfHostedFixIsAKnownZeroNotWithheld(t *testing.T) {
+	ctx := context.Background()
+	d, st := meterDeps(t, "t1")
+	d.Connectors, d.Token = connector.NewRegistry(), "platform-tok"
+	d.putSpend(ctx, platform.AISpend{ID: spendID(), TenantID: "t1", At: nowUTC(), Kind: "fix patch (draft)", Surface: "code",
+		CostKnown: true, PerCall: true, ActionID: "a1", SelfHosted: true, Model: "qwen-local"})
+	_ = st.PutAction(ctx, platform.Action{ID: "a1", TenantID: "t1", Status: platform.ActApplied, Verification: &platform.FixVerification{Status: platform.FixStatusFixed}})
+	s := aiValueSurface(t, d, "code")
+	if s.CostPerVerifiedFix == nil || *s.CostPerVerifiedFix != 0 {
+		t.Fatalf("a self-hosted proven fix must show $0.00, not be withheld: %+v", s.CostPerVerifiedFix)
+	}
+	if s.SelfHosted != 1 {
+		t.Errorf("the self-hosted row must be counted as such: %+v", s)
+	}
 }
