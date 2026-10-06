@@ -38,6 +38,8 @@ export function AIValueCard({ v }: { v: AIValue }) {
             <th className="text-right font-medium">Spent</th>
             <th className="text-right font-medium">Proven findings</th>
             <th className="text-right font-medium">Cost per proof</th>
+            <th className="text-right font-medium">Proven fixes</th>
+            <th className="text-right font-medium">Cost per proven fix</th>
           </tr>
         </thead>
         <tbody>
@@ -58,6 +60,19 @@ export function AIValueCard({ v }: { v: AIValue }) {
               <td className="text-right">
                 {s.cost_per_verified !== undefined ? usd(s.cost_per_verified) : <span className="text-faint">—</span>}
               </td>
+              <td className="text-right">
+                {s.fixes_attempted > 0 ? (
+                  <>
+                    {s.verified_fixes}
+                    <span className="text-faint"> of {s.fixes_attempted}</span>
+                  </>
+                ) : (
+                  <span className="text-faint">—</span>
+                )}
+              </td>
+              <td className="text-right">
+                {s.cost_per_verified_fix !== undefined ? usd(s.cost_per_verified_fix) : <span className="text-faint">—</span>}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -66,8 +81,15 @@ export function AIValueCard({ v }: { v: AIValue }) {
         &ldquo;Model calls&rdquo; are single requests made outside a priced run — a code sweep, exploit proposals, CWE
         attribution — and count toward your monthly AI budget like runs do. &ldquo;Unpriced&rdquo; runs or calls used a
         model that reported no usage — their cost is unknown, not zero, so cost per proof
-        is not shown where they occur. {v.fixes_proven_closed} fix(es) were proven closed by a re-test in this period;
-        that is shown for context and not credited to the AI.
+        is not shown where they occur. Cost per proof counts only runs, the spend that can prove a finding.
+        Cost per proven fix divides everything spent writing fixes — including the ones that did not close or are
+        still awaiting a re-test — by the fixes a re-test proved closed.
+        {v.total.no_outcome_usd > 0 && (
+          <> {usd(v.total.no_outcome_usd)} went on work with no measured outcome (sweep candidates, CWE attribution,
+          eval scoring) — counted in Spent, not in either cost-per figure.</>
+        )}{" "}
+        In all, {v.fixes_proven_closed} fix(es) were proven closed by a re-test in this period, from any source —
+        that total is context and not credited to the AI; only the proven fixes above were written by it.
         {v.unmetered.length > 0 && <> Not yet counted here: {v.unmetered.join(", ")}.</>}
       </p>
     </div>

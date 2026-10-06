@@ -2410,6 +2410,10 @@ type AISpend struct {
 	// rather than for a whole run. Both count toward the monthly ceiling; the value view counts them as
 	// calls, not runs, because a code sweep making two hundred calls did not run two hundred times.
 	PerCall bool `json:"per_call,omitempty"`
+	// ActionID ties a call to the remediation Action it was spent producing (the code-fix patch). It is
+	// what lets a fix the re-test later proves closed be weighed against what writing it cost — and a
+	// fix that did NOT close against the same spend, so a cost per proven fix counts the failures too.
+	ActionID string `json:"action_id,omitempty"`
 }
 
 // AutonomyGrant lets one (finding class, remediation type) skip the approval desk. GrantedBy is the named

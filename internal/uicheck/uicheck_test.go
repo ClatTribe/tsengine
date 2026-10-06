@@ -113,6 +113,19 @@ var required = []struct {
 			"counted as zero it reads as \"nothing changed\" — the opposite fact",
 	},
 	{
+		page:  "frontend/components/engineer/ai-value.tsx",
+		field: "fixes_attempted",
+		wouldOtherwiseClaim: "that the AI's fixes all worked, when the cost per proven fix is only honest " +
+			"beside how many fixes were attempted — the ones that did not close are in the price, and the " +
+			"reader must be able to see that they exist",
+	},
+	{
+		page:  "frontend/components/engineer/ai-value.tsx",
+		field: "no_outcome_usd",
+		wouldOtherwiseClaim: "that every dollar of AI spend bought a proof or a fix, when part of it went on " +
+			"work with no measured outcome — hidden, it either inflates a cost-per figure or vanishes from view",
+	},
+	{
 		page:  "frontend/app/(app)/activity/page.tsx",
 		field: "weakest_remediations",
 		wouldOtherwiseClaim: "that every applied fix worked, when the tenant's own history can name " +
