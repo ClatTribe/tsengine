@@ -29,7 +29,7 @@ import (
 // a test that fails before and passes after is the strongest evidence a PR can carry that the fix
 // is real, and the reviewer is told when there is none.
 func (d Deps) PatchForAction(ctx context.Context, a platform.Action, c platform.Connection, token string) (map[string]string, string, error) {
-	llm := d.resolveAgentLLMForRole(aiKind(ctx, "fix patch", "code"), a.TenantID, platform.RoleCode)
+	llm := d.resolveAgentLLMForRole(aiKindForAction(ctx, "fix patch", "code", a.ID), a.TenantID, platform.RoleCode)
 	if llm == nil {
 		return nil, "", fmt.Errorf("no AI model is configured for this workspace, so the engineer could not write the patch (Settings → AI model)")
 	}
@@ -80,7 +80,7 @@ func (d Deps) PatchForAction(ctx context.Context, a platform.Action, c platform.
 	// cascades costlier than frontier-only on detection stages does not exist here.
 	var draftNote string
 	if d.PatchVerifier != nil {
-		if draft := d.resolveDraftLLM(aiKind(ctx, "fix patch (draft)", "code"), a.TenantID); draft != nil {
+		if draft := d.resolveDraftLLM(aiKindForAction(ctx, "fix patch (draft)", "code", a.ID), a.TenantID); draft != nil {
 			res := d.attemptPatch(ctx, draft, a, f, full, cf, sources)
 			if res.outcome == patchVerified {
 				return res.files, "Drafted by the workspace's draft model (" + modelName(draft) + ") and verified, so the code model was not needed. " + res.note, nil

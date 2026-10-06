@@ -79,6 +79,10 @@ func TestCascade_VerifiedDraftShipsWithoutTheCodeModel(t *testing.T) {
 	for _, r := range rows {
 		if r.Kind == "fix patch (draft)" {
 			drafted = true
+			// The draft's spend belongs to the fix it wrote, so it counts toward cost per proven fix.
+			if r.ActionID != a.ID {
+				t.Errorf("draft spend is not tied to the action it produced: %+v", r)
+			}
 		}
 	}
 	if !drafted {

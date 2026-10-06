@@ -2424,6 +2424,10 @@ type AISpend struct {
 	// rather than for a whole run. Both count toward the monthly ceiling; the value view counts them as
 	// calls, not runs, because a code sweep making two hundred calls did not run two hundred times.
 	PerCall bool `json:"per_call,omitempty"`
+	// ActionID ties a call to the remediation Action it was spent producing (the code-fix patch). It is
+	// what lets a fix the re-test later proves closed be weighed against what writing it cost — and a
+	// fix that did NOT close against the same spend, so a cost per proven fix counts the failures too.
+	ActionID string `json:"action_id,omitempty"`
 	// SelfHosted marks a run served by the tenant's OWN self-hosted model (Ollama / an OpenAI-compatible
 	// endpoint they run). Such a run costs nothing and is recorded at $0 with the cost KNOWN — not unknown,
 	// and not priced: the default rate for an unpriced model is right for a frontier model reached through
