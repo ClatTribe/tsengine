@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -192,12 +193,16 @@ func (d Deps) monthlyAISpend(ctx context.Context, tenantID string) (float64, int
 	// The append-only record: every run, including re-runs and runs that produced nothing.
 	var total float64
 	runs := 0
+	var free map[string]bool
+	if t, err := d.Store.GetTenant(ctx, tenantID); err == nil {
+		free = selfHostedModels(t)
+	}
 	if rows, err := d.Store.ListAISpend(ctx, tenantID); err == nil {
 		for _, e := range rows {
 			if !sameMonth(e.At) {
 				continue
 			}
-			if e.CostKnown && e.USD > 0 {
+			if e.CostKnown && e.USD > 0 && !spendFree(e, free) {
 				total += e.USD
 			}
 			runs++
@@ -213,7 +218,7 @@ func (d Deps) monthlyAISpend(ctx context.Context, tenantID string) (float64, int
 			if !sameMonth(a.CreatedAt) {
 				continue
 			}
-			if a.CostUSD > 0 {
+			if a.CostUSD > 0 && !free[strings.ToLower(strings.TrimSpace(a.Model))] {
 				legacy += a.CostUSD
 			}
 			legacyRuns++

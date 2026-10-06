@@ -2220,6 +2220,8 @@ export interface AISurfaceValue {
   unknown_cost_runs: number;
   calls: number;
   unknown_cost_calls: number;
+  /** Runs + calls on the tenant's own self-hosted model — $0, cost known. Absent on an older server. */
+  self_hosted?: number;
   usd: number;
   verified: number;
   cost_per_verified?: number;

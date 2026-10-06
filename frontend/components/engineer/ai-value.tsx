@@ -53,6 +53,9 @@ export function AIValueCard({ v }: { v: AIValue }) {
                 {s.unknown_cost_runs + s.unknown_cost_calls > 0 && (
                   <span className="text-faint"> + {s.unknown_cost_runs + s.unknown_cost_calls} unpriced</span>
                 )}
+                {(s.self_hosted ?? 0) > 0 && (
+                  <span className="text-faint"> · {s.self_hosted} on your self-hosted model ($0)</span>
+                )}
               </td>
               <td className="text-right">{s.verified}</td>
               <td className="text-right">
@@ -66,7 +69,8 @@ export function AIValueCard({ v }: { v: AIValue }) {
         &ldquo;Model calls&rdquo; are single requests made outside a priced run — a code sweep, exploit proposals, CWE
         attribution — and count toward your monthly AI budget like runs do. &ldquo;Unpriced&rdquo; runs or calls used a
         model that reported no usage — their cost is unknown, not zero, so cost per proof
-        is not shown where they occur. {v.fixes_proven_closed} fix(es) were proven closed by a re-test in this period;
+        is not shown where they occur. Runs on your own self-hosted model (Ollama or an OpenAI-compatible endpoint you
+        run) cost nothing and count as $0 toward your monthly AI budget. {v.fixes_proven_closed} fix(es) were proven closed by a re-test in this period;
         that is shown for context and not credited to the AI.
         {v.unmetered.length > 0 && <> Not yet counted here: {v.unmetered.join(", ")}.</>}
       </p>
