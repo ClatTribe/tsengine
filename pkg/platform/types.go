@@ -2414,6 +2414,13 @@ type AISpend struct {
 	// what lets a fix the re-test later proves closed be weighed against what writing it cost — and a
 	// fix that did NOT close against the same spend, so a cost per proven fix counts the failures too.
 	ActionID string `json:"action_id,omitempty"`
+	// SelfHosted marks a run served by the tenant's OWN self-hosted model (Ollama / an OpenAI-compatible
+	// endpoint they run). Such a run costs nothing and is recorded at $0 with the cost KNOWN — not unknown,
+	// and not priced: the default rate for an unpriced model is right for a frontier model reached through
+	// a proxy and wrong for hardware the customer already owns, where it charged invented spend against
+	// their monthly AI budget. Kept as a flag so the value view can say "self-hosted" rather than show a
+	// bare $0 that looks like a missing number.
+	SelfHosted bool `json:"self_hosted,omitempty"`
 }
 
 // AutonomyGrant lets one (finding class, remediation type) skip the approval desk. GrantedBy is the named

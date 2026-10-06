@@ -328,3 +328,22 @@ func TestMeter_EverySelfPricedRunIsOneRow(t *testing.T) {
 		check(t, st, "code")
 	})
 }
+
+// A fix written entirely on the tenant's own self-hosted model costs a KNOWN $0 (#1533), and that is a
+// real price: the cost per proven fix is shown as $0.00, not withheld as if it were unknown. Withholding
+// it would hide exactly the saving a free draft model exists to deliver.
+func TestAIValue_SelfHostedFixIsAKnownZeroNotWithheld(t *testing.T) {
+	ctx := context.Background()
+	d, st := meterDeps(t, "t1")
+	d.Connectors, d.Token = connector.NewRegistry(), "platform-tok"
+	d.putSpend(ctx, platform.AISpend{ID: spendID(), TenantID: "t1", At: nowUTC(), Kind: "fix patch (draft)", Surface: "code",
+		CostKnown: true, PerCall: true, ActionID: "a1", SelfHosted: true, Model: "qwen-local"})
+	_ = st.PutAction(ctx, platform.Action{ID: "a1", TenantID: "t1", Status: platform.ActApplied, Verification: &platform.FixVerification{Status: platform.FixStatusFixed}})
+	s := aiValueSurface(t, d, "code")
+	if s.CostPerVerifiedFix == nil || *s.CostPerVerifiedFix != 0 {
+		t.Fatalf("a self-hosted proven fix must show $0.00, not be withheld: %+v", s.CostPerVerifiedFix)
+	}
+	if s.SelfHosted != 1 {
+		t.Errorf("the self-hosted row must be counted as such: %+v", s)
+	}
+}

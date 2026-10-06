@@ -2224,6 +2224,8 @@ export interface AISurfaceValue {
   verified_fixes: number;
   cost_per_verified_fix?: number;
   no_outcome_usd: number;
+  /** Runs + calls on the tenant's own self-hosted model — $0, cost known. Absent on an older server. */
+  self_hosted?: number;
   usd: number;
   verified: number;
   cost_per_verified?: number;

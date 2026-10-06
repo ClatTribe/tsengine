@@ -27,11 +27,14 @@ type surfaceValue struct {
 	// Calls are single model calls recorded by the metering wrapper outside any run that prices itself
 	// (aimeter.go) — the code sweep, exploit proposals, CWE attribution and the rest. They are spend, so
 	// they count toward Spent and the monthly ceiling, but they are not runs.
-	Calls            int      `json:"calls"`
-	UnknownCostCalls int      `json:"unknown_cost_calls"`
-	USD              float64  `json:"usd"`
-	Verified         int      `json:"verified"`
-	CostPerVerified  *float64 `json:"cost_per_verified,omitempty"`
+	Calls            int `json:"calls"`
+	UnknownCostCalls int `json:"unknown_cost_calls"`
+	// SelfHosted counts runs and calls served by the tenant's own self-hosted model: $0 with the cost
+	// known, shown as such so a bare $0 does not read as a missing number.
+	SelfHosted      int      `json:"self_hosted"`
+	USD             float64  `json:"usd"`
+	Verified        int      `json:"verified"`
+	CostPerVerified *float64 `json:"cost_per_verified,omitempty"`
 	// Fix attribution. A call spent writing a fix carries the Action it produced (AISpend.ActionID); when a
 	// re-test proves that fix closed the finding, the fix is VERIFIED. The cost per proven fix divides ALL
 	// fix spend — including fixes that did not close, or are not re-tested yet — by the proven ones, because
@@ -73,6 +76,10 @@ func (d Deps) handleAIValue(w http.ResponseWriter, r *http.Request, tenantID str
 		respond(w, nil, err)
 		return
 	}
+	var free map[string]bool
+	if t, terr := d.Store.GetTenant(r.Context(), tenantID); terr == nil {
+		free = selfHostedModels(t)
+	}
 	by := map[string]*surfaceValue{}
 	view := aiValueView{Days: days, Surfaces: []surfaceValue{}, Total: surfaceValue{Surface: "all"}, Unmetered: unmeteredAIPaths}
 	actionSurface := map[string]string{} // action id → the surface its fix spend was recorded on
@@ -88,10 +95,16 @@ func (d Deps) handleAIValue(w http.ResponseWriter, r *http.Request, tenantID str
 		if e.ActionID != "" {
 			actionSurface[e.ActionID] = e.Surface
 		}
+		if spendFree(e, free) {
+			e.USD, e.CostKnown = 0, true
+		}
 		for _, v := range []*surfaceValue{sv, &view.Total} {
 			v.Verified += e.Verified
 			if e.CostKnown {
 				v.USD += e.USD
+			}
+			if spendFree(e, free) {
+				v.SelfHosted++
 			}
 			switch {
 			case e.ActionID != "":
@@ -145,12 +158,14 @@ func (d Deps) handleAIValue(w http.ResponseWriter, r *http.Request, tenantID str
 	for i := range view.Surfaces {
 		v := &view.Surfaces[i]
 		// Per proven FINDING: only runs can verify a finding, so only their spend is the cost of one.
-		if v.Verified > 0 && v.UnknownCostRuns == 0 && v.runUSD > 0 {
+		// A known $0 is a real price — the tenant's own self-hosted model (#1533) — so it is shown, not
+		// withheld; only an UNKNOWN cost withholds the figure.
+		if v.Verified > 0 && v.UnknownCostRuns == 0 {
 			c := v.runUSD / float64(v.Verified)
 			v.CostPerVerified = &c
 		}
 		// Per proven FIX: all fix spend, failures included, over the fixes a re-test proved.
-		if v.VerifiedFixes > 0 && !v.fixUnpriced && v.fixUSD > 0 {
+		if v.VerifiedFixes > 0 && !v.fixUnpriced {
 			c := v.fixUSD / float64(v.VerifiedFixes)
 			v.CostPerVerifiedFix = &c
 		}

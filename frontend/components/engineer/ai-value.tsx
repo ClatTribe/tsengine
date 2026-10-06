@@ -55,6 +55,9 @@ export function AIValueCard({ v }: { v: AIValue }) {
                 {s.unknown_cost_runs + s.unknown_cost_calls > 0 && (
                   <span className="text-faint"> + {s.unknown_cost_runs + s.unknown_cost_calls} unpriced</span>
                 )}
+                {(s.self_hosted ?? 0) > 0 && (
+                  <span className="text-faint"> · {s.self_hosted} on your self-hosted model ($0)</span>
+                )}
               </td>
               <td className="text-right">{s.verified}</td>
               <td className="text-right">
@@ -88,6 +91,8 @@ export function AIValueCard({ v }: { v: AIValue }) {
           <> {usd(v.total.no_outcome_usd)} went on work with no measured outcome (sweep candidates, CWE attribution,
           eval scoring) — counted in Spent, not in either cost-per figure.</>
         )}{" "}
+        Runs on your own self-hosted model (Ollama or an OpenAI-compatible endpoint you run) cost nothing and
+        count as $0 toward your monthly AI budget.{" "}
         In all, {v.fixes_proven_closed} fix(es) were proven closed by a re-test in this period, from any source —
         that total is context and not credited to the AI; only the proven fixes above were written by it.
         {v.unmetered.length > 0 && <> Not yet counted here: {v.unmetered.join(", ")}.</>}
