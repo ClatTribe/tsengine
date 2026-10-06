@@ -1301,6 +1301,28 @@ core; the live *execution* stays each core's gated half:
   action to the tenant's own Jira (resolver opens the sealed token â `connector.NewJira`), falling
   back to the operator tracker (`JIRA_BASE_URL`/ServiceNow/Linear env â the Bucket-C fallback). So
   remediation tickets are multi-tenant, not one shared project.
+- **two-way ticket sync** (`internal/ticketsync`) — a remediation delivered as a ticket used to END at
+  "filed": `connector.Jira.FileTicket` discarded the created issue's key, so nothing could learn that the
+  team closed the ticket — the most common way a fix quietly fails. Now `FileTicketRef` returns the key,
+  `remediate.Deliverer.ApplyResult` hands it back through the new optional `hitl.ResultApplier` (the desk
+  persists ITS copy after applying, so a ref stored any other way was overwritten; the desk copies ONLY
+  `Ticket` from delivery, never status/approver/tier), and `Action.Ticket` records the tracker's view.
+  `runner.syncTickets` reads tickets back on the full pass (after the re-test, so the comment carries this
+  pass's verdict) AND the 10-minute event poll. TWO VERDICTS, NEVER MERGED: a closed ticket marks nothing
+  fixed — closure still comes only from `retest.Verify`/`ApplyReattack`; the sync records the
+  DISAGREEMENT (`ClosedStillPresent`: tracker done AND a re-test made AFTER the close still finds it) and
+  comments our verdict back. Rules, each tested: Jira's fixed statusCategory decides done, never the
+  per-workflow status name; an unreadable ticket keeps its last view and records why (unreadable is not
+  "open"); a verdict older than the close is not a disagreement; a comment, never a transition (reopening
+  is the customer's process); each outcome posted once, and `rescan_unconfirmed` never produces a "fixed"
+  comment; a reopened ticket drops what we said about its close; reads are bounded oldest-first; the
+  kill-switch stops it (writing into the customer's Jira is agent activity); the read-back uses the SAME
+  credentials that filed it and REFUSES when the tenant's Jira now points at a different site
+  (`remediate.ErrDestinationMoved`) — the same key on another site is a stranger's issue. Persistence
+  re-reads and replaces only `Ticket`, because writing the stale copy back could undo a verification the
+  pass just recorded (mutation-verified). Surfaced on `/activity` with `tickets_closed_still_present` /
+  `tickets_unreadable` on `GET /v1/actions`, guarded by `internal/uicheck`. Jira only; Linear/ServiceNow
+  keep filing one-way.
 - **escalation matrix (24Ã7-SOC parity)** â `GET/PUT /v1/settings/escalation` + the Settings
   "Escalation matrix" control: stores `Tenant.Escalation` (`platform.EscalationPolicy` â ordered
   tiers of `MinSeverity â Channels` + an `AckWindowMins`; channel names only, no secret â plain).

@@ -37,6 +37,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/retest"
 	"github.com/ClatTribe/tsengine/internal/sspm"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/internal/ticketsync"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -257,6 +258,10 @@ type Service struct {
 	// Func-typed so the runner never imports the pentest machinery or its network reach; the
 	// composition root wires the prober.
 	Reattacker func(ctx context.Context, tenantID string, keys []string) map[string]retest.ReattackVerdict
+
+	// TicketTracker reads delivered tickets back from the tracker that holds them (two-way ticket sync,
+	// internal/ticketsync). nil → tickets are filed and never read back, which is how it was before.
+	TicketTracker ticketsync.TrackerFor
 
 	// AfterPass, when set, fires on EVERY monitoring pass (unconditionally, unlike AfterScan) — the
 	// hook for time-driven, change-independent work like running due SCHEDULED pentests. Any gating
@@ -653,6 +658,10 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 				}
 			}
 		}
+		// Two-way ticket sync, AFTER the re-test so the comment it writes back carries this pass's
+		// verdict. Runs on a degraded pass too: it reads the tracker and compares against whatever
+		// verdict the action already holds; it never derives a verdict from this pass's absences.
+		s.syncTickets(ctx, tenantID)
 		// A-RSP "respond" half: for each NEWLY-OPENED incident, the agent prepares a
 		// response. A critical incident yields a T3 breach-disclosure DRAFT that queues for
 		// a human signature (it can never auto-apply). Best-effort + optional — omit the

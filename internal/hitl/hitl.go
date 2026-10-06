@@ -41,6 +41,13 @@ type Applier interface {
 	Apply(ctx context.Context, a platform.Action) error
 }
 
+// ResultApplier is the optional form that returns the action AS DELIVERED (e.g. carrying the ticket the
+// tracker created). The desk persists its own copy right after applying, so anything delivery learned
+// has to come back through here or it is overwritten.
+type ResultApplier interface {
+	ApplyResult(ctx context.Context, a platform.Action) (platform.Action, error)
+}
+
 // Notifier is pinged when an action queues for human approval (satisfied by
 // *notify.Slack). Optional + nil-safe — the desk calls it best-effort.
 type Notifier interface {
@@ -219,7 +226,16 @@ func (d *Desk) apply(ctx context.Context, a platform.Action, approver string) (p
 		return a, ErrHalted
 	}
 	if d.Apply != nil {
-		if err := d.Apply.Apply(ctx, a); err != nil {
+		var err error
+		if ra, ok := d.Apply.(ResultApplier); ok {
+			var delivered platform.Action
+			if delivered, err = ra.ApplyResult(ctx, a); err == nil {
+				a.Ticket = delivered.Ticket // only what delivery may set; status/approver stay the desk's
+			}
+		} else {
+			err = d.Apply.Apply(ctx, a)
+		}
+		if err != nil {
 			// keep it visible: the action stays pending/approved-but-failed, not silently lost
 			a.Status = platform.ActApproved
 			a.DeliveryError = deliveryError(err)
