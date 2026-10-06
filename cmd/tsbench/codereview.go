@@ -80,7 +80,7 @@ func codereviewBuild(argv []string) error {
 			return fmt.Errorf("%s: %w", id, err)
 		}
 		b, _ := json.MarshalIndent(c, "", "  ")
-		if err := os.WriteFile(filepath.Join(*out, c.ID+".json"), append(b, '\n'), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(*out, c.ID+".json"), append(b, '\n'), 0o600); err != nil {
 			return err
 		}
 		built++
@@ -205,7 +205,7 @@ func codereviewRun(argv []string) error {
 			}
 		}
 		b, _ := json.MarshalIndent(preds, "", "  ")
-		return os.WriteFile(*out, b, 0o644)
+		return os.WriteFile(*out, b, 0o600)
 	}
 	ctx := context.Background()
 	for _, c := range cases {
@@ -263,7 +263,7 @@ func codereviewRun(argv []string) error {
 		preds.Ran[c.ID] = true
 		delete(preds.Errors, c.ID)
 		fmt.Printf("RAN     %s — %d tasks planned, %d ran, %d candidate locations\n", c.ID, res.Planned, res.Ran, len(ps))
-		if err := os.WriteFile(*out, mustIndent(preds), 0o644); err != nil { // after EVERY case
+		if err := os.WriteFile(*out, mustIndent(preds), 0o600); err != nil { // after EVERY case
 			return err
 		}
 	}
@@ -358,7 +358,7 @@ func codereviewScore(argv []string) error {
 		fmt.Print(codereviewbench.Render(s))
 	}
 	if *out != "" {
-		return os.WriteFile(*out, []byte(codereviewbench.Render(s)), 0o644)
+		return os.WriteFile(*out, []byte(codereviewbench.Render(s)), 0o600)
 	}
 	return nil
 }
