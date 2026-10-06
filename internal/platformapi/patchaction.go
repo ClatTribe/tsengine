@@ -7,6 +7,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/codeagent"
+	"github.com/ClatTribe/tsengine/internal/fixcheck"
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/internal/tool/patchverify"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -127,11 +128,33 @@ func (d Deps) attemptPatch(ctx context.Context, llm codeagent.LLM, a platform.Ac
 	if patch.Empty() {
 		return patchAttempt{outcome: patchNone, why: "it proposed no change"}
 	}
+
+	// PRE-DELIVERY SOUNDNESS GATE (host-side, always runs — no sandbox needed, unlike PatchVerifier
+	// below). The patch is about to be committed to a PR branch a human is asked to merge; before it
+	// is, check it is non-trivial, aimed at the cited line, and (for Go) still parses. A failing check
+	// means the "fix" changes nothing, misses the vulnerable line, or breaks the build — none of which
+	// should reach a reviewer as a diff. Withheld exactly like a patch the test suite rejects. This
+	// proves soundness, NOT closure (the re-scan + re-attack verify closure post-deploy).
+	// The file was read with line-number prefixes ("N: ...", the build-context format the engineer's
+	// prompt needs); fixcheck compares against the CLEAN original, so strip them first — otherwise
+	// every line differs and the checks are meaningless.
+	cleanOriginal := stripLineNumbers(content)
+	pairs := make([]fixcheck.File, 0, len(patch.Files))
+	for _, pf := range patch.Files {
+		pairs = append(pairs, fixcheck.File{Path: pf.Path, Original: cleanOriginal, Patched: pf.Content})
+	}
+	sound := fixcheck.Checks(fixcheck.Finding{Endpoint: f.Endpoint}, pairs)
+	if sound.Blocking {
+		return nil, "", fmt.Errorf("the engineer's patch failed a pre-delivery soundness check (%s); the diff is withheld and the instructions below stand",
+			fixcheckFailures(sound))
+	}
+
 	files := map[string]string{}
 	for _, pf := range patch.Files {
 		files[pf.Path] = pf.Content
 	}
 	note := "The patch is proposed by the AI engineer (codeagent.ProposePatch, the engine measured in tsbench cvepatch) from the file the finding cites."
+	note += " Pre-delivery checks: " + fixcheckSummary(sound) + "."
 	regressionPath := ""
 	if reg, err := codeagent.ProposeRegressionTest(ctx, llm, cf, patch, sources); err == nil && !reg.Empty() {
 		if _, clash := files[reg.File.Path]; !clash {
@@ -188,4 +211,43 @@ func modelName(llm any) string {
 		return mn.ModelName()
 	}
 	return "unnamed model"
+}
+
+// fixcheckFailures lists the checks that failed, for the withholding error.
+func fixcheckFailures(r fixcheck.Report) string {
+	var parts []string
+	for _, c := range r.Checks {
+		if c.Status == fixcheck.Fail {
+			parts = append(parts, c.Message)
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
+// fixcheckSummary renders every check's outcome for the PR body, so a reviewer sees what was and was
+// not verified — a NotChecked is stated as itself, never dropped to look like a pass.
+func fixcheckSummary(r fixcheck.Report) string {
+	var parts []string
+	for _, c := range r.Checks {
+		parts = append(parts, string(c.Status)+" "+c.Name)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// stripLineNumbers removes the "N: " prefix codeagent's ReadFile adds to each line for the model's
+// build context, recovering the file's real content for fixcheck's comparison.
+func stripLineNumbers(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, ln := range lines {
+		j := 0
+		for j < len(ln) && ln[j] >= '0' && ln[j] <= '9' {
+			j++
+		}
+		if j > 0 && j+1 < len(ln) && ln[j] == ':' && ln[j+1] == ' ' {
+			lines[i] = ln[j+2:]
+		} else if j > 0 && j+1 == len(ln) && ln[j] == ':' {
+			lines[i] = "" // a numbered blank line ("2:")
+		}
+	}
+	return strings.Join(lines, "\n")
 }

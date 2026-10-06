@@ -96,3 +96,38 @@ func TestPatchForAction_RefusesWithAReasonRatherThanGuessing(t *testing.T) {
 		t.Errorf("a vanished finding must be named, got %v", err)
 	}
 }
+
+// noopPatchLLM echoes the original file back unchanged — the "fix" that fixes nothing.
+type noopPatchLLM struct{}
+
+func (noopPatchLLM) Generate(_ context.Context, _ string) (string, error) {
+	return "=== FILE: app/db.go ===\npackage app // vulnerable\n=== END FILE ===\n", nil
+}
+
+// A patch that changes nothing is withheld by the pre-delivery soundness gate, not shipped as a diff.
+func TestPatchForAction_NoOpPatchIsWithheld(t *testing.T) {
+	d, a, c := patchDeps(t, nil)
+	d.AgentLLM = noopPatchLLM{}
+	files, _, err := d.PatchForAction(context.Background(), a, c, "gh-token")
+	if err == nil {
+		t.Fatalf("a no-op patch must be withheld, got files=%v", files)
+	}
+	if !strings.Contains(err.Error(), "soundness") {
+		t.Errorf("the error should name the soundness gate, got %q", err.Error())
+	}
+	if files != nil {
+		t.Errorf("no files should be returned when the patch is withheld, got %v", files)
+	}
+}
+
+// A sound patch's PR note states the pre-delivery checks that ran.
+func TestPatchForAction_NoteStatesPreDeliveryChecks(t *testing.T) {
+	d, a, c := patchDeps(t, &patchLLM{})
+	_, note, err := d.PatchForAction(context.Background(), a, c, "gh-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(note, "Pre-delivery checks:") {
+		t.Errorf("note should state the pre-delivery checks, got %q", note)
+	}
+}

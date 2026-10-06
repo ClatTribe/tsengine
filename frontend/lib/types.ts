@@ -2230,6 +2230,12 @@ export interface AISurfaceValue {
   verified: number;
   cost_per_verified?: number;
 }
+// Pre-delivery patch soundness (internal/fixcheck): checks a proposed fix must survive before it is
+// committed to a PR — non-trivial, aimed at the cited line, parses. These prove the patch is SOUND,
+// not that the vulnerability is closed (that is verified post-deploy by the re-scan + re-attack).
+export interface FixCheck { name: string; status: "pass" | "fail" | "not_checked"; message: string }
+export interface FixSoundness { checks: FixCheck[]; blocking: boolean; note: string }
+
 export interface AIValue {
   days: number;
   surfaces: AISurfaceValue[];

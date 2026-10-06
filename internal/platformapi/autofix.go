@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/codeagent"
+	"github.com/ClatTribe/tsengine/internal/fixcheck"
 
 	"github.com/ClatTribe/tsengine/internal/store"
 	"github.com/ClatTribe/tsengine/pkg/types"
@@ -64,9 +65,15 @@ func (d Deps) handleAutofix(w http.ResponseWriter, r *http.Request, tenantID str
 				map[string]any{"tenant_id": tenantID, "finding_id": id, "rule": f.RuleID, "repo": repo,
 					"files": len(patch.Files)}, "AI autofix patch via the benchmarked engine")
 		}
+		// PRE-DELIVERY SOUNDNESS. Before this patch is committed to a PR branch and handed to a human,
+		// check it is non-trivial, aimed at the cited line, and (for Go) still parses. These prove the
+		// patch is SOUND, not that the vulnerability is CLOSED (that is verified post-deploy by retest +
+		// the re-attack). A failing check means a human must look before merging — see fixcheck.
+		soundness := fixcheck.Checks(fixcheck.Finding{Endpoint: f.Endpoint}, pairFiles(sources, patch))
 		writeJSON(w, http.StatusOK, map[string]any{
 			"finding_id": id, "title": f.Title, "rule_id": f.RuleID,
 			"fix": patch.Raw, "files": patch.Files, "repo": repo,
+			"soundness": soundness,
 			// The DIFF is what a reviewer reads; whole-file contents are what gets applied.
 			"diff":   patch.UnifiedDiff(map[string]string{}),
 			"engine": "codeagent.ProposePatch (execution-verified in tsbench cvepatch)",
@@ -208,4 +215,20 @@ func regressionPayload(r codeagent.RegressionTest) map[string]any {
 		return nil
 	}
 	return map[string]any{"path": r.File.Path, "content": r.File.Content}
+}
+
+// pairFiles pairs each proposed patched file with the original source it replaces (both keyed by the
+// same repository path), for fixcheck. An original we don't have is paired with "" — fixcheck's
+// non-trivial check still sees a change, and its cited-line check reports NotChecked rather than
+// guessing.
+func pairFiles(sources []codeagent.SourceFile, patch codeagent.Patch) []fixcheck.File {
+	orig := make(map[string]string, len(sources))
+	for _, s := range sources {
+		orig[s.Path] = s.Content
+	}
+	out := make([]fixcheck.File, 0, len(patch.Files))
+	for _, pf := range patch.Files {
+		out = append(out, fixcheck.File{Path: pf.Path, Original: stripLineNumbers(orig[pf.Path]), Patched: pf.Content})
+	}
+	return out
 }
