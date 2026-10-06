@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
@@ -60,6 +61,11 @@ func (d Deps) putSpend(ctx context.Context, e platform.AISpend) {
 	if !known {
 		e.USD = 0
 	}
+	// The one place every spend row passes through, so a self-hosted run is free no matter which meter
+	// priced it (the per-call wrapper, a run-level meter, or the Lead's own estimate).
+	if d.selfHostedModel(ctx, tenantID, e.Model) {
+		e.USD, e.CostKnown, e.SelfHosted = 0, true, true
+	}
 	if err := d.Store.PutAISpend(ctx, e); err != nil {
 		slog.Warn("ai spend not recorded", "tenant", tenantID, "kind", kind, "err", err.Error())
 	}
@@ -82,4 +88,48 @@ func spendID() string {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	return "spend-" + time.Now().UTC().Format("20060102T150405.000000000") + "-" + hex.EncodeToString(b)
+}
+
+// selfHostedModels is the set of model names (lower-cased) served by the tenant's OWN self-hosted configs
+// — the default or a per-role override whose provider is "ollama" or "openai-compat" (the providers the
+// settings page labels self-hosted; a cloud provider's base URL is cleared on save, so SelfHosted() is
+// exactly that set). Spend rows are matched on the model name, because a row knows which model ran and
+// not which config built it.
+//
+// Applied when a row is WRITTEN and again when rows are READ (the monthly budget, the value view), so
+// rows recorded at the default frontier rate before this rule existed stop charging the budget at once
+// rather than at the next month boundary.
+func selfHostedModels(t platform.Tenant) map[string]bool {
+	out := map[string]bool{}
+	add := func(c *platform.LLMConfig) {
+		if c != nil && c.SelfHosted() {
+			if m := strings.ToLower(strings.TrimSpace(c.Model)); m != "" {
+				out[m] = true
+			}
+		}
+	}
+	add(t.LLM)
+	for _, c := range t.LLMRoles {
+		add(c)
+	}
+	return out
+}
+
+// selfHostedModel reports whether model is one of the tenant's self-hosted models. An empty name never
+// matches: "free" is a claim that needs the model it is about.
+func (d Deps) selfHostedModel(ctx context.Context, tenantID, model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	if model == "" || d.Store == nil {
+		return false
+	}
+	t, err := d.Store.GetTenant(ctx, tenantID)
+	if err != nil {
+		return false
+	}
+	return selfHostedModels(t)[model]
+}
+
+// spendFree reports whether a stored row is a self-hosted run, either flagged at write time or matched now.
+func spendFree(e platform.AISpend, selfHosted map[string]bool) bool {
+	return e.SelfHosted || selfHosted[strings.ToLower(strings.TrimSpace(e.Model))]
 }

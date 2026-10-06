@@ -27,11 +27,14 @@ type surfaceValue struct {
 	// Calls are single model calls recorded by the metering wrapper outside any run that prices itself
 	// (aimeter.go) — the code sweep, exploit proposals, CWE attribution and the rest. They are spend, so
 	// they count toward Spent and the monthly ceiling, but they are not runs.
-	Calls            int      `json:"calls"`
-	UnknownCostCalls int      `json:"unknown_cost_calls"`
-	USD              float64  `json:"usd"`
-	Verified         int      `json:"verified"`
-	CostPerVerified  *float64 `json:"cost_per_verified,omitempty"`
+	Calls            int `json:"calls"`
+	UnknownCostCalls int `json:"unknown_cost_calls"`
+	// SelfHosted counts runs and calls served by the tenant's own self-hosted model: $0 with the cost
+	// known, shown as such so a bare $0 does not read as a missing number.
+	SelfHosted      int      `json:"self_hosted"`
+	USD             float64  `json:"usd"`
+	Verified        int      `json:"verified"`
+	CostPerVerified *float64 `json:"cost_per_verified,omitempty"`
 }
 
 type aiValueView struct {
@@ -58,6 +61,10 @@ func (d Deps) handleAIValue(w http.ResponseWriter, r *http.Request, tenantID str
 		respond(w, nil, err)
 		return
 	}
+	var free map[string]bool
+	if t, terr := d.Store.GetTenant(r.Context(), tenantID); terr == nil {
+		free = selfHostedModels(t)
+	}
 	by := map[string]*surfaceValue{}
 	view := aiValueView{Days: days, Surfaces: []surfaceValue{}, Total: surfaceValue{Surface: "all"}, Unmetered: unmeteredAIPaths}
 	for _, e := range rows {
@@ -69,10 +76,16 @@ func (d Deps) handleAIValue(w http.ResponseWriter, r *http.Request, tenantID str
 			sv = &surfaceValue{Surface: e.Surface}
 			by[e.Surface] = sv
 		}
+		if spendFree(e, free) {
+			e.USD, e.CostKnown = 0, true
+		}
 		for _, v := range []*surfaceValue{sv, &view.Total} {
 			v.Verified += e.Verified
 			if e.CostKnown {
 				v.USD += e.USD
+			}
+			if spendFree(e, free) {
+				v.SelfHosted++
 			}
 			switch {
 			case e.PerCall:

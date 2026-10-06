@@ -34,7 +34,7 @@ func (d Deps) persistAIAnalysis(ctx context.Context, tenantID, kind, scope, titl
 		Reports:    reportsFromFindings(out.Findings),
 		Model:      out.Model,
 		Iterations: out.Iterations,
-		CostUSD:    out.CostUSD,
+		CostUSD:    analysisCost(d, ctx, tenantID, out),
 		CreatedAt:  now,
 	}
 	if out.Summary != nil {
@@ -83,4 +83,14 @@ func (d Deps) handleListAIAnalyses(w http.ResponseWriter, r *http.Request, tenan
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"analyses": out})
+}
+
+// analysisCost is the cost shown on a persisted analysis. A self-hosted run is $0 here too: the monthly
+// budget still reads AIAnalysis.CostUSD for the month the spend record shipped (max of the two), so a
+// priced self-hosted run left here would keep charging the budget through the back door.
+func analysisCost(d Deps, ctx context.Context, tenantID string, out l2.Outcome) float64 {
+	if d.selfHostedModel(ctx, tenantID, out.Model) {
+		return 0
+	}
+	return out.CostUSD
 }
