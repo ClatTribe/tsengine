@@ -29,7 +29,7 @@ fi
 
 # Kept in sync with the wrappers by TestVerifyToolsListMatchesTheWrappers; a binary added to a wrapper
 # and not here fails that test rather than silently going unverified.
-BINARIES="amass apkid bandit checkdmarc checkov cloudfox codeql cosign dalfox dnstwist dockle ffuf
+BINARIES="amass apkid bandit checkdmarc checkov cloudfox codeql cosign dalfox deepsec dnstwist dockle ffuf
 gitleaks gosec govulncheck grype hadolint httpx hydra inql katana kics kr mobsfscan modelscan naabu
 nikto nmap nuclei osv-scanner padbuster prowler schemathesis scout semgrep sqlmap subfinder syft
 trivy trufflehog wpscan"

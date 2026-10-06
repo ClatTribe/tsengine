@@ -90,6 +90,14 @@ type ToolReplayer interface {
 	ReplayTool(ctx context.Context, a platform.Asset, toolName string, args tool.Args, replayID string) ([]types.Finding, error)
 }
 
+// ToolOutputReplayer is the optional form that also returns the tool's run summary (tool.Result.Output).
+// It exists for tools whose replay SPENDS something the platform must account for — deepsec reports its
+// model cost there, and a replay path that dropped it would let a tenant's monthly AI ceiling miss the
+// most expensive run it ever made. Optional, so existing replayers need not change.
+type ToolOutputReplayer interface {
+	ReplayToolWithOutput(ctx context.Context, a platform.Asset, toolName string, args tool.Args, replayID string) ([]types.Finding, any, error)
+}
+
 // Tokens resolves a connection's vaulted OAuth token (the secret store). Kept as an
 // interface so the MVP KMS-envelope impl and a test stub are interchangeable.
 type Tokens interface {
