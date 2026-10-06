@@ -1019,10 +1019,24 @@ const (
 	RoleAnalysis AgentRole = "analysis"
 	// RoleCode — patch generation, exploitation, code and spec reasoning.
 	RoleCode AgentRole = "code"
+	// RoleCodeDraft — an OPTIONAL cheaper model that drafts a code fix FIRST, used only where the draft
+	// can be checked by executing the customer's tests (platformapi.PatchForAction). A draft the tests
+	// reject, or no draft at all, falls through to the RoleCode model. Unlike the other roles it has NO
+	// fallback: unset means no cascade, never "draft with the default model".
+	RoleCodeDraft AgentRole = "code_draft"
 )
 
 // AgentRoles is the closed set, for validation and for the settings UI.
-func AgentRoles() []AgentRole { return []AgentRole{RoleAnalysis, RoleCode} }
+func AgentRoles() []AgentRole { return []AgentRole{RoleAnalysis, RoleCode, RoleCodeDraft} }
+
+// DraftLLM returns the explicitly configured draft model, or nil. Deliberately NO fallback to the
+// tenant default: a cascade whose draft and escalation are the same model spends twice for one answer.
+func (t Tenant) DraftLLM() *LLMConfig {
+	if c, ok := t.LLMRoles[RoleCodeDraft]; ok && c.Usable() {
+		return c
+	}
+	return nil
+}
 
 // ValidAgentRole reports whether s names a known role.
 func ValidAgentRole(s string) bool {
