@@ -282,6 +282,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("POST /v1/connections/{id}/cloud-remediation", d.auth(d.handleSetCloudRemediation)) // per-tenant cloud write role (Bucket B)
 	mux.HandleFunc("GET /v1/tenant", d.auth(d.handleGetTenant))                                        // the current tenant (org name/plan) for Settings
 	mux.HandleFunc("GET /v1/settings/llm", d.auth(d.handleGetLLMSettings))                             // per-tenant LLM config (provider/model + has_key)
+	mux.HandleFunc("POST /v1/settings/llm/trial", d.auth(d.handleLLMTrial))                            // grade a candidate model on the tenant's own cases before assigning it
 	mux.HandleFunc("PUT /v1/settings/llm", d.auth(d.handlePutLLMSettings))                             // set provider/model + seal the API key
 	mux.HandleFunc("POST /v1/ci/pr-check", d.auth(d.handleCIPRCheck))                                  // CI entry point: PR changed-lines + findings → merge-gating attack-path check (wedge gap #3)
 	mux.HandleFunc("GET /v1/settings/training", d.auth(d.handleGetTrainingSettings))                   // may our agent runs improve the product (ADR 0018 §4)

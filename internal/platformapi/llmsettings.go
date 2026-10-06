@@ -10,6 +10,7 @@ import (
 
 	"github.com/ClatTribe/tsengine/internal/cloudengine"
 	"github.com/ClatTribe/tsengine/internal/pentest"
+	"github.com/ClatTribe/tsengine/internal/tenanteval"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
 
@@ -74,6 +75,10 @@ func (d Deps) handlePutLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 		// Empty = the tenant's default model, i.e. the original behaviour. This is what lets a tenant
 		// run a self-hosted security model for triage while keeping a frontier model for code.
 		Role string `json:"role"`
+		// AcknowledgeLowerScore confirms a switch the tenant's own graded cases say is WORSE. Without it
+		// such a switch is refused with the numbers; it is never needed when the evidence is a match or
+		// does not exist yet (that case is allowed and reported as unmeasured).
+		AcknowledgeLowerScore bool `json:"acknowledge_lower_score"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, errBody("invalid request"))
@@ -107,6 +112,21 @@ func (d Deps) handlePutLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, errBody("tenant not found"))
 		return
+	}
+	// EVIDENCE GATE (analysis lane only). Triage and correlation have no per-answer check, so a cheaper
+	// model's mistakes there pass silently — the one place a switch must rest on the customer's own
+	// graded cases. The code lanes are gated per fix by executing the tests (the cascade), not here.
+	var evidence *tenanteval.RouteEvidence
+	if role == "" || role == string(platform.RoleAnalysis) {
+		ev := d.routeEvidence(r.Context(), tenantID, body.Provider+"/"+strings.TrimSpace(body.Model))
+		evidence = &ev
+		if ev.Status == tenanteval.RouteWorse && !body.AcknowledgeLowerScore {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"error":    "On your own graded cases this model did worse than the one you have. Send acknowledge_lower_score to switch anyway.",
+				"evidence": ev,
+			})
+			return
+		}
 	}
 	cfg := &platform.LLMConfig{Provider: body.Provider, Model: strings.TrimSpace(body.Model), BaseURL: baseURL}
 	// Preserve the existing key for THIS slot, so the model can be changed without re-entering the key.
@@ -143,11 +163,19 @@ func (d Deps) handlePutLLMSettings(w http.ResponseWriter, r *http.Request, tenan
 		return
 	}
 	if d.Recorder != nil {
-		d.Recorder.Record("LLM config updated", "llm_config",
-			map[string]any{"tenant_id": tenantID, "provider": cfg.Provider, "model": cfg.Model, "has_key": cfg.HasKey(), "role": role},
-			"tenant LLM configured")
+		meta := map[string]any{"tenant_id": tenantID, "provider": cfg.Provider, "model": cfg.Model, "has_key": cfg.HasKey(), "role": role}
+		if evidence != nil {
+			// The ledger records what the switch rested on, and that a lower score was knowingly accepted.
+			meta["evidence"] = evidence.Status
+			meta["acknowledged_lower_score"] = body.AcknowledgeLowerScore && evidence.Status == tenanteval.RouteWorse
+		}
+		d.Recorder.Record("LLM config updated", "llm_config", meta, "tenant LLM configured")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"provider": cfg.Provider, "model": cfg.Model, "has_key": cfg.HasKey(), "base_url": cfg.BaseURL, "role": role})
+	out := map[string]any{"provider": cfg.Provider, "model": cfg.Model, "has_key": cfg.HasKey(), "base_url": cfg.BaseURL, "role": role}
+	if evidence != nil {
+		out["evidence"] = evidence
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // resolveTenantLLMConfig returns the tenant's FULL LLM config (incl. BaseURL for a self-hosted model)
