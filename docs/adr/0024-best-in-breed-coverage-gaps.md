@@ -81,8 +81,9 @@ corpus we did not write — because a cell scored only against our own fixtures 
    [XBOW 104]    │  Lead + L1.5 enrichment; the   │ RoE-gated, canary-proofed,          │
    *** the       │  defensive work here is L1/L1.5│ predicate-disposes, benign-by-      │
    omitted       │  not a dedicated agent)        │ construction.                       │
-   strength ***  │                                │ ** XBOW 89/104 = 85.6% **           │
-                 │                                │ vs MAPTA (published SOTA) 76.9%     │
+   strength ***  │                                │ ** XBOW 78/104 first try (75.0%) ** │
+                 │                                │ ** 89/104 with retries (85.6%) **   │
+                 │                                │ MAPTA 76.9%: attempt basis unchecked│
                  ├────────────────────────────────┼────────────────────────────────────┤
                  │ BUILT + MEASURED               │ N/A — compliance is not exploitable│
    COMPLIANCE    │ internal/grc + the L1.5        │ There is no "prove it by running   │
@@ -129,7 +130,7 @@ Three facts behind the grid, each grep-confirmed:
    the RoE `ActiveDriver`) targets **web + api** only.
 
 3. **The strongest agent isn't in the claimed list.** The web/api active pentester is the most
-   capable, most externally-benchmarked agent in the tree (XBOW 85.6%, above published SOTA), and
+   capable, most externally-benchmarked agent in the tree (XBOW 78/104 first attempt, 89/104 = 85.6% with retries), and
    compliance is at 96% crosswalk corroboration — yet BOTH were omitted from the "cloud, code,
    identity" framing.
 
@@ -254,7 +255,7 @@ operating-model moat the GRC buyers pay for).
 | identity × pentester | **High** — NodeZero solved GOAD | **Yes, but gated** — via twin; high blast radius |
 | identity × engineer (agent) | Low — detection already 0.993 | **No agent needed for detection**; only for multi-step narrative (nice-to-have) |
 | code × engineer depth (G1 ADR 0013) | Medium — Snyk Agent Fix shipped | **Yes** — but it is depth, not a missing cell |
-| web/api × pentester | We LEAD; NodeZero entering | **Defend** — publish the XBOW 85.6% headline |
+| web/api × pentester | We LEAD; NodeZero entering | **Defend** — publish the XBOW headline: 78/104 first attempt, 89/104 (85.6%) with retries |
 
 The uncomfortable finding: we told ourselves cloud/identity exploitation was structurally out of
 scope, and three well-funded incumbents are winning deals by proving it benignly. The focus decision
@@ -545,10 +546,10 @@ compliance) is unchanged; this ADDS an offensive proof capability to the cloud e
 a new headline product.
 
 ### P0 — Fix the naming NOW (0 code, ships today)
-The pitch claims six cells and delivers three; it omits web/api offense (85.6% XBOW, above SOTA) and
+The pitch claims six cells and delivers three; it omits web/api offense (XBOW 78/104 first attempt, 89/104 = 85.6% with retries) and
 compliance (96% crosswalk). Retire "AI pentester for cloud/code/identity." Ship:
-> *"An AI pentester that proves web & API vulnerabilities by exploiting them (85.6% XBOW, above
-> published SOTA); an AI security engineer that finds and fixes cross-surface attack paths across
+> *"An AI pentester that proves web & API vulnerabilities by exploiting them (XBOW: 78 of 104 on the
+> first attempt, 89 of 104 = 85.6% with retries); an AI security engineer that finds and fixes cross-surface attack paths across
 > cloud and code; deterministic identity & SaaS posture at SCuBA 0.993 with no LLM. Cloud/identity
 > exploitation-PROOF is on the roadmap via provider dry-run + digital twin."*
 Every claim in that sentence is checkable in this tree today. **Do this first, regardless of the rest.**
@@ -713,7 +714,7 @@ it is continuously monitored · and it reports the rung it actually stands on.
 
 | Surface | Engineer (find + fix) | Pentester | What closing it needs |
 |---|---|---|---|
-| **web** | find: continuous, L1/L1.5, no agent · fix: built [#1397], **unmeasured** | **closed** — XBOW 85.6% > MAPTA 76.9% | Publish the offence number (P0). Engineer side needs the live WAVSEP number (§16, target-gated) and R3's fix number. |
+| **web** | find: continuous, L1/L1.5, no agent · fix: built [#1397], **unmeasured** | **measured, not ranked** — XBOW 78/104 first attempt (75.0%), 89/104 with retries (85.6%); MAPTA publishes 76.9% on an attempt basis we have not checked, so no ranking is claimed — first-attempt we would sit below it, with retries above | Publish the offence number (P0). Engineer side needs the live WAVSEP number (§16, target-gated) and R3's fix number. |
 | **api** | find: continuous · fix: built [#1397], **unmeasured** | capability real, **no neutral key** — `apiauthz` live-wired behind an operator env + per-request consent, plus `bola_probe`/`privesc_probe`; CLAUDE.md §14 says "None public — internal only" | Find a neutral corpus, or **state plainly that none exists**. Do not fill the cell with a fixture score — that is C13 again. |
 | **cloud** | 64.5% neutral · fix unmeasured · one-shot | seam only | R1 + R2 → P1a (wire the dormant `Analyzer`) → P1c → P1d. |
 | **code** | 46.54% SAST · `cvepatch` fix execution-verified but unscaled | **N/A by construction** (B2/C14) | Mark N/A, not empty. Then P4a depth + a scaled `cvepatch` number. |
@@ -771,4 +772,4 @@ to the level of the grid.
 | **P5** `internal/llmclient` extract | S | none | Proposed — parallel lane, unblocks P4 |
 
 **Competitor watch:** NodeZero entered web-app pentesting (2026-07) — our lead lane. Publishing the
-XBOW 85.6% headline (P0) is now time-sensitive, not cosmetic.
+XBOW headline (78/104 first attempt, 89/104 = 85.6% with retries) (P0) is now time-sensitive, not cosmetic.

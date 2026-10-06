@@ -792,7 +792,7 @@ not that we win the deal.
 | 3 | **Cross-surface path validation** | `estategraph` (`ErrNoEvidence`, exact-format identity only) + `estatedetect` (`leaked-credential-is-live`, `cross-surface-path-to-crown`, `choke-point`, `exposed-identity-no-mfa`) across code · cloud · SaaS · identity · OSINT · warehouse | XBOW chains within web/API; Horizon3 chains network → AD → cloud. Neither joins SOURCE CODE + SaaS + identity into one evidence-carrying graph | **LEAD** — the only clean one, and on a different axis from Horizon3's |
 | 4 | **Offence → audit evidence** | 25 frameworks incl. CERT-In / RBI / SEBI, live control-state SoR, gap→citing-finding resolution, OSCAL component-def + assessment-results, evidence timeline, signed attestation, coverage layer that refuses "compliant" | XBOW: reports "meet pentest requirements for 40+ frameworks" — REPORT ACCEPTANCE, i.e. one control | **PARITY on the datasheet line, LEAD on substance** — and a buyer comparing datasheets cannot see the difference |
 | 5 | **Named-human accountability** | Capacity + firm stamped from the ROSTER onto risks / sign-offs / policies / attestations; operator desk gated to the practitioner's own book; ledger-signed. RBI requires testing by an *independent agency*, which makes this a compliance mechanism, not a channel nicety | Horizon3 has an MSP channel. Whether anyone stamps accountability onto the artifact is **unverified** | **LIKELY DIFFERENTIATED, UNVERIFIED** — do not claim it as a lead |
-| 6 | **Falsifiable external measurement** | XBOW key 85.6% (89/104) (measured with a frontier LLM via a file-relay research harness, not the production self-serve path — model-dependent, an upper bound) · IAM-Vulnerable 64.5% (with FP set) · Rhino 65.2% · SCuBA 0.993 · OWASP 46.5% | XBOW is #1 on HackerOne with ~1,060 accepted real-world reports — adversarially graded by the programs paying out | **BEHIND** XBOW; ahead of the rest. The defensible claim is narrow: *we publish numbers that can go down* |
+| 6 | **Falsifiable external measurement** | XBOW key 78/104 first attempt (75.0%) · 89/104 with retries (85.6%) (measured with a frontier LLM via a file-relay research harness, not the production self-serve path — model-dependent, an upper bound) · IAM-Vulnerable 64.5% (with FP set) · Rhino 65.2% · SCuBA 0.993 · OWASP 46.5% | XBOW is #1 on HackerOne with ~1,060 accepted real-world reports — adversarially graded by the programs paying out | **BEHIND** XBOW; ahead of the rest. The defensible claim is narrow: *we publish numbers that can go down* |
 
 ### The agent overlay — which capability each product owns
 
@@ -873,7 +873,7 @@ same capability at ~65%. The numbers that count in this lane:
 
 | Key | Whose | Score | Read |
 |---|---|---|---|
-| XBOW 104-benchmark | a competitor's | 85.6% (89/104) | flag-capture, ungameable; tractable ceiling reached |
+| XBOW 104-benchmark | a competitor's | 78/104 first attempt (75.0%) · 89/104 with retries (85.6%) | flag-capture, ungameable; tractable ceiling reached |
 | BishopFox IAM-Vulnerable | external | 64.5% | has an FP control set — the half that can go DOWN |
 | Rhino GCP privesc catalogue | external | 65.2% | RECALL ONLY — no published FP set |
 | CISA SCuBA | external | 0.993 (SHALL 0.990) | execution-proven mappings — the assessor must really fire on a violating snapshot |

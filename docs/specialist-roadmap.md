@@ -38,7 +38,7 @@ prevent is spreading across all six and leading in none.
 | Focus area | Neutral benchmark | Measured | Gap to "best in breed" |
 |---|---|---|---|
 | **Cloud** | IAM-Vulnerable (Bishop Fox) · CloudGoat (Rhino) | substrate **16/16** privesc primitives, cross-account + GCP/Azure chains; frontier-brain agent **100% recall, 0 invented** over the proxy (§2.4) | **Small.** Live 31-scenario Terraform deploy is the remaining depth item. |
-| **Offense** | XBOW 104-challenge | **85.6%** (89/104) (measured with a frontier LLM via a file-relay research harness, not the production self-serve path — model-dependent, an upper bound); a frontier-brain agent verifies findings FP-free over the proxy (§2.4) | **Credibility.** Published research SOTA is MAPTA at **76.9%**; we are above it. |
+| **Offense** | XBOW 104-challenge | **78/104 first attempt (75.0%) · 89/104 with retries (85.6%)** (measured with a frontier LLM via a file-relay research harness, not the production self-serve path — model-dependent, an upper bound); a frontier-brain agent verifies findings FP-free over the proxy (§2.4) | **Credibility.** MAPTA publishes **76.9%** on an attempt basis we have not checked, so no ranking is claimed: first-attempt we sit below it, with retries above. |
 | **Compliance** | OpenCRE (OWASP) · SCF · CSA CCM | **96%** crosswalk corroboration (48/50 CWEs) | **Small.** The SCF/CCM axis is unrun (needs an operator-supplied matrix export); OSCAL assessment-results is the next artifact. |
 
 ### 2.4 The agents, driven by a frontier brain over the proxy
