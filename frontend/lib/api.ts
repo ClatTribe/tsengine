@@ -1,6 +1,7 @@
 import "server-only";
 import { getSession, apiBase, type Session } from "./auth";
 import type {
+  NotifyChannel, NotifyPatch, NotifySettings,
   ResearchResult,
   AutonomyReport,
   APIKey, APIKeysResponse, SecurityPolicy, SSOSettings, SCIMSettings,
@@ -905,13 +906,17 @@ export const api = {
   deleteMaintenanceWindow: (id: string) =>
     call<{ deleted: string }>(`/v1/maintenance-windows/${id}`, { method: "DELETE" }),
 
-  // Per-tenant Slack incident webhook (Bucket B). GET reports only presence; PUT seals the URL
-  // server-side and never returns it. An empty string clears it (revert to the operator fallback).
-  notifySettings: () => safe<{ has_slack_webhook: boolean }>("/v1/settings/notifications", { has_slack_webhook: false }),
-  setNotifySettings: (slackWebhook: string) =>
-    call<{ has_slack_webhook: boolean }>("/v1/settings/notifications", {
-      method: "PUT",
-      body: JSON.stringify({ slack_webhook: slackWebhook }),
+  // The tenant's OWN notification destinations (Bucket B). GET reports only presence; PUT seals each
+  // value server-side and never returns it. A field left out is unchanged; "" clears that channel.
+  notifySettings: () =>
+    safe<NotifySettings>("/v1/settings/notifications", { has_slack_webhook: false, channels: {}, webhook_signed: false }),
+  setNotifySettings: (patch: NotifyPatch) =>
+    call<NotifySettings>("/v1/settings/notifications", { method: "PUT", body: JSON.stringify(patch) }),
+  // Sends ONE labelled test alert to ONE channel. A PagerDuty test pages a real person.
+  testNotifyChannel: (channel: NotifyChannel) =>
+    call<{ channel: string; ok: boolean; error?: string }>("/v1/settings/notifications/test", {
+      method: "POST",
+      body: JSON.stringify({ channel }),
     }),
 
   // Create + authorize a pentest engagement (the API enforces the active-mode

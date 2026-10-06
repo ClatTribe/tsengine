@@ -1273,14 +1273,26 @@ core; the live *execution* stays each core's gated half:
   `Writer`. Non-secret identifiers (like `Account`) â stored plain, not sealed. Still HITL-gated; a wrong
   role surfaces honestly at Apply. This is the per-TENANT half; whether the deployment can do live cloud
   writes at all stays the operator's `*_REMEDIATION_*` env (Bucket C).
-- **notifications** â `GET/PUT /v1/settings/notifications` + the Settings "Notifications" Slack control:
-  stores the tenant's OWN Slack Incoming Webhook (sealed via `d.Vault` â a webhook URL is a bearer
-  capability, so unlike the cloud role it MUST seal; GET reports only `has_slack_webhook`). The incident
-  alerter is a `notify.TenantRouter` that routes each new incident to its OWN tenant's webhook (resolver
-  opens the sealed ref) AND the operator-global `MultiAlerter` fallback â so incident heads-ups are
-  multi-tenant, not one shared channel. Approval *buttons* stay the operator Slack app (those need its
-  interactive endpoint). Operator-env channels (`TSENGINE_SLACK_WEBHOOK`/Teams/Discord/PagerDuty/webhook)
-  remain the Bucket-C fallback.
+- **notifications** — `GET/PUT /v1/settings/notifications` + `POST /v1/settings/notifications/test` + the
+  Settings "Notifications" channel list: the tenant's OWN Slack, Microsoft Teams, Discord, PagerDuty
+  (routing key) and signed webhook (+ HMAC secret), each sealed via `d.Vault` (every value is a bearer
+  capability) in `Tenant.SlackWebhookRef` / `Tenant.NotifyChannelRefs`; GET reports presence only. Until
+  this, only Slack could be the customer's own and Teams/PagerDuty/webhook were one operator-wide env
+  setting — so a customer on Teams got nothing, and an escalation tier "critical → pagerduty" paged the
+  OPERATOR's rotation for the customer's incident. Now `notify.TenantRouter.Channels` delivers to every
+  tenant channel (+ the operator fallback) and `notify.PolicyRouter.TenantChannels` makes a tier's channel
+  name resolve to the TENANT's destination first, the operator's only when the tenant has none of that
+  name. PUT fields are pointers: ABSENT leaves a channel alone, `""` clears it (the old endpoint cleared
+  Slack on any body without it, so a client saving Teams would have wiped Slack). Undeliverable values are
+  refused at save time and nothing half-applies. The generic webhook is the one destination whose host the
+  tenant picks freely, so it posts through `netguard.GuardedClient` — refused at DIAL time, because a
+  hostname valid when saved can be re-pointed at 169.254.169.254 later; save-time `screenPublicHost` only
+  tells the customer sooner. The test endpoint sends ONE `[TEST]`-labelled high-severity alert (high,
+  because Teams/Discord/PagerDuty drop anything lower by default — a lower test would be dropped by the gate
+  it is meant to exercise) to ONE named channel, never "test all", since a PagerDuty test wakes a person;
+  the page reports what the destination answered ("accepted by", never "delivered"), guarded by
+  `internal/uicheck`. Owner-only via the settings-prefix rule in `ownerOnlyRoute`. Approval *buttons* stay the operator Slack
+  app (they need its interactive endpoint). Operator-env channels remain the Bucket-C fallback.
 - **ticketing (Jira)** â `GET/PUT /v1/settings/jira` + the Settings "Jira" control: stores the tenant's
   OWN Jira (`Tenant.Jira` â BaseURL/Email/Project plain, API token sealed via `d.Vault`; GET reports
   has_token only). `remediate.TenantFiler` (mirrors `notify.TenantRouter`) routes a `file_ticket`

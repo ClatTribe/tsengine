@@ -2224,6 +2224,22 @@ export interface AIValue {
   unmetered: string[];
 }
 
+// The tenant's own notification channels — names match the escalation-policy channel names.
+export type NotifyChannel = "slack" | "teams" | "discord" | "pagerduty" | "webhook";
+export interface NotifySettings {
+  has_slack_webhook: boolean;
+  // Presence only. A channel absent from the map (an older server) reads as not configured.
+  channels: Partial<Record<NotifyChannel, boolean>>;
+  webhook_signed: boolean;
+}
+export interface NotifyPatch {
+  slack_webhook?: string;
+  teams_webhook?: string;
+  discord_webhook?: string;
+  pagerduty_routing_key?: string;
+  webhook_url?: string;
+  webhook_secret?: string;
+}
 // Bounded research (POST /v1/research/finding/{id}): cited, pinned reference material — context, never
 // evidence. unavailable = allowed but failed; rejected = refused before any fetch.
 export interface ResearchDocument {

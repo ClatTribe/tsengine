@@ -17,8 +17,13 @@ type PolicyResolver func(ctx context.Context, tenantID string) *platform.Escalat
 // detect.Alerter (IncidentOpened) structurally.
 type PolicyRouter struct {
 	Resolve  PolicyResolver     // tenant → escalation policy (nil → Default)
-	Channels map[string]Alerter // channel name (slack|pagerduty|teams|discord|webhook) → destination
-	Default  Alerter            // fallback when no policy matches (e.g. a TenantRouter); may be nil
+	Channels map[string]Alerter // OPERATOR channel name (slack|pagerduty|teams|discord|webhook) → destination
+	// TenantChannels resolves the tenant's OWN destinations. A tier naming "pagerduty" pages the
+	// TENANT's rotation when it configured one, and the operator's only when it did not. Without this,
+	// a customer's escalation matrix could only ever reach the operator's channels — "critical →
+	// pagerduty" woke up our on-call for their incident and never theirs.
+	TenantChannels TenantChannelResolver
+	Default        Alerter // fallback when no policy matches (e.g. a TenantRouter); may be nil
 }
 
 // IncidentOpened delivers per the tenant's escalation policy, else via Default. Best-effort: a
@@ -29,10 +34,18 @@ func (r PolicyRouter) IncidentOpened(ctx context.Context, inc platform.Incident)
 		pol = r.Resolve(ctx, inc.TenantID)
 	}
 	if names, ok := pol.ChannelsFor(inc.Severity); ok {
+		var tenant map[string]Alerter
+		if r.TenantChannels != nil {
+			tenant = r.TenantChannels(ctx, inc.TenantID)
+		}
 		var firstErr error
 		delivered := false
 		for _, name := range names {
-			if a := r.Channels[name]; a != nil {
+			a := tenant[name] // the tenant's own destination wins over the operator's for the same name
+			if a == nil {
+				a = r.Channels[name]
+			}
+			if a != nil {
 				delivered = true
 				if err := a.IncidentOpened(ctx, inc); err != nil && firstErr == nil {
 					firstErr = err

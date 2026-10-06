@@ -311,23 +311,14 @@ func main() {
 		channelMap["webhook"] = wh
 		log.Print("[platform] generic outbound webhook enabled (signed incident events)")
 	}
-	// Per-tenant Slack routing (Bucket B): each tenant's new-incident heads-up goes to its OWN
-	// configured Slack webhook (sealed, set via Settings → Notifications), with the operator
-	// MultiAlerter as the fallback. The resolver opens the sealed ref per incident; a miss falls
-	// through to the operator channels. So incident notifications are multi-tenant, not one shared
-	// channel. (Approval buttons stay the operator Slack app — those need its interactive endpoint.)
+	// Per-tenant routing (Bucket B): each tenant's new-incident alert goes to EVERY destination it
+	// configured for itself (Slack, Teams, Discord, PagerDuty, signed webhook — sealed, set via
+	// Settings → Notifications), with the operator MultiAlerter as the fallback. The resolver opens the
+	// sealed refs per incident; a miss falls through to the operator channels. (Approval buttons stay
+	// the operator Slack app — those need its interactive endpoint.)
+	tenantChannels := platformapi.NotifyChannelResolver(st, vault)
 	tenantRouter := notify.TenantRouter{
-		Resolve: func(ctx context.Context, tenantID string) (string, bool) {
-			t, gerr := st.GetTenant(ctx, tenantID)
-			if gerr != nil || !t.HasSlackWebhook() {
-				return "", false
-			}
-			url, oerr := vault.Open(t.SlackWebhookRef)
-			if oerr != nil || url == "" {
-				return "", false
-			}
-			return url, true
-		},
+		Channels: tenantChannels,
 		Fallback: alerters, // operator-global channels (may be empty → fallback is a no-op)
 	}
 	// Escalation matrix (Phase 2): when a tenant has an enabled escalation policy, a new incident is
@@ -341,8 +332,9 @@ func main() {
 			}
 			return t.Escalation
 		},
-		Channels: channelMap,
-		Default:  tenantRouter,
+		Channels:       channelMap,
+		TenantChannels: tenantChannels, // a tier's "pagerduty" pages the TENANT's rotation when it has one
+		Default:        tenantRouter,
 	})
 	if os.Getenv("TSENGINE_WEBHOOK_SECRET") == "" {
 		log.Print("[platform] WARNING: inbound webhooks are NOT verified — set TSENGINE_WEBHOOK_SECRET to reject spoofed events")
