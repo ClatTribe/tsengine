@@ -167,6 +167,13 @@ type Tenant struct {
 	// the fallback). A webhook URL is a bearer capability, so it is sealed, never plaintext at rest,
 	// and never returned to the client — Redacted() strips it; HasSlackWebhook() reports presence.
 	SlackWebhookRef string `json:"slack_webhook_ref,omitempty"`
+	// NotifyChannelRefs are the tenant's OTHER own notification destinations, each Vault-sealed and
+	// keyed by channel: "teams", "discord", "pagerduty" (the routing key), "webhook" (the URL) and
+	// "webhook_secret" (its HMAC key). Same rules as SlackWebhookRef — every value is a bearer
+	// capability, sealed at rest, stripped by Redacted(), reported only as presence. Until these
+	// existed only Slack could be the customer's own; Teams, PagerDuty and the signed webhook were one
+	// operator-wide setting, so a customer's "critical → pagerduty" paged the operator, never them.
+	NotifyChannelRefs map[string]string `json:"notify_channel_refs,omitempty"`
 	// Jira is the tenant's OWN Jira instance where file_ticket remediations land (per-tenant; the
 	// operator-env Jira is the fallback). BaseURL/Email/Project are plain identifiers; the API token
 	// is sealed (TokenRef). Redacted() drops the whole block.
@@ -411,6 +418,18 @@ func (t Tenant) InMaintenance(now time.Time) (MaintenanceWindow, bool) {
 
 // HasSlackWebhook reports whether the tenant has configured its own Slack incident webhook.
 func (t Tenant) HasSlackWebhook() bool { return t.SlackWebhookRef != "" }
+
+// NotifyChannelsConfigured reports which of the tenant's own notification channels are set — presence
+// only, never a value. Keys are the escalation-policy channel names.
+func (t Tenant) NotifyChannelsConfigured() map[string]bool {
+	return map[string]bool{
+		"slack":     t.SlackWebhookRef != "",
+		"teams":     t.NotifyChannelRefs["teams"] != "",
+		"discord":   t.NotifyChannelRefs["discord"] != "",
+		"pagerduty": t.NotifyChannelRefs["pagerduty"] != "",
+		"webhook":   t.NotifyChannelRefs["webhook"] != "",
+	}
+}
 
 // EscalationPolicy is the per-tenant incident escalation matrix — the MDR/SOC "who is alerted, and
 // how urgently" for a newly-opened incident (PagerDuty/Opsgenie parity + the contractual
@@ -1051,6 +1070,7 @@ func (t Tenant) Redacted() Tenant {
 	t.LLM = nil
 	t.LLMRoles = nil // per-role overrides carry sealed key refs too — same reason as LLM
 	t.SlackWebhookRef = ""
+	t.NotifyChannelRefs = nil
 	t.Jira = nil
 	t.Drata = nil
 	t.MDM = nil
@@ -1299,6 +1319,13 @@ type Action struct {
 	// internal/fieldevidence exists to remember. Worse, the erasure biased toward TRUST and grew
 	// stronger the more diligently a customer fixed things.
 	VerificationHistory []FixVerification `json:"verification_history,omitempty"`
+	// Ticket is the issue-tracker ticket this action was delivered as, and what the tracker last said
+	// about it. Nil for an action that never became a ticket.
+	//
+	// Before this the filer threw the created issue's key away, so the loop ENDED at "filed": nothing
+	// could tell whether the customer's team closed the ticket, and a ticket closed without the fix —
+	// the most common way a remediation quietly fails — was invisible. See internal/ticketsync.
+	Ticket *TicketRef `json:"ticket,omitempty"`
 	// DeliveryError is why the last apply attempt failed, redacted and bounded.
 	//
 	// Without it a delivery failure was INVISIBLE: hitl.Desk deliberately leaves a failed action at
@@ -2394,4 +2421,35 @@ type AutonomyGrant struct {
 	GrantedBy       string    `json:"granted_by"`
 	GrantedAt       time.Time `json:"granted_at"`
 	BasisClosed     int       `json:"basis_closed"`
+}
+
+// TicketRef is one delivered ticket and the tracker's last-known view of it.
+//
+// TWO VERDICTS LIVE SIDE BY SIDE ON PURPOSE: the tracker's (Resolved — a person moved the ticket to a
+// done state) and ours (the action's Verification — a re-test). They are different claims. "The team
+// closed the ticket" says someone believes the work is done; "the finding is gone" is evidence it is.
+// ClosedStillPresent is the disagreement, and it is the fact this whole record exists to surface.
+type TicketRef struct {
+	System string `json:"system"` // "jira"
+	Key    string `json:"key"`    // e.g. "SEC-142"
+	URL    string `json:"url,omitempty"`
+	// Destination is whose tracker holds it: "tenant" (the customer's own Jira) or "operator". The sync
+	// must read it back with the SAME credentials that filed it.
+	Destination string    `json:"destination"`
+	FiledAt     time.Time `json:"filed_at"`
+
+	Status         string    `json:"status,omitempty"`          // the tracker's own status name ("In Review")
+	StatusCategory string    `json:"status_category,omitempty"` // new | indeterminate | done (Jira's fixed set)
+	Resolved       bool      `json:"resolved"`
+	ResolvedAt     time.Time `json:"resolved_at,omitzero"`
+	LastSyncedAt   time.Time `json:"last_synced_at,omitzero"`
+	// SyncError is why the last read-back failed (redacted, bounded). A ticket we can no longer read is
+	// not a ticket that is still open, and must not be rendered as one.
+	SyncError string `json:"sync_error,omitempty"`
+
+	// ClosedStillPresent: the tracker says done AND our re-test still finds the issue.
+	ClosedStillPresent bool `json:"closed_still_present,omitempty"`
+	// Notified is the last outcome we wrote back to the ticket as a comment ("still_present" | "fixed"),
+	// so each outcome is posted once rather than every pass.
+	Notified string `json:"notified,omitempty"`
 }

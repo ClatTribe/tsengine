@@ -39,6 +39,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/l2"
 	"github.com/ClatTribe/tsengine/internal/pentest"
 	"github.com/ClatTribe/tsengine/internal/ratelimit"
+	"github.com/ClatTribe/tsengine/internal/research"
 	"github.com/ClatTribe/tsengine/internal/runner"
 	"github.com/ClatTribe/tsengine/internal/scubaingest"
 	"github.com/ClatTribe/tsengine/internal/store"
@@ -147,6 +148,10 @@ type Deps struct {
 	// the deterministic HeuristicSpecGen (today's behaviour). The model widens discovery only; the
 	// deterministic predicate + the RoE Guard still gate every probe, so no LLM false positives.
 	AgentLLM pentest.SpecLLM
+	// ResearchFetch does one bounded, SSRF-screened GET for the research tool (internal/research). Nil →
+	// the default public-only fetcher (safeResearchFetcher). Injected in tests so the handler's
+	// allowlist/selection logic is checked without the network.
+	ResearchFetch research.Fetcher
 	// AgentLLMFactory, when set, builds a FRESH operator client per resolve so each run's usage is read
 	// from a counter no other tenant shares (aimeter.go). AgentLLM stays the "is a model configured" signal
 	// and the fallback when the factory returns nil.
@@ -286,8 +291,9 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/launch-readiness", d.platformAuth(d.handleLaunchReadiness)) // operator: what nobody set (mail, leads, OAuth apps, model, corpus, URLs)
 	mux.HandleFunc("GET /v1/settings/branding", d.auth(d.handleGetBranding))            // white-label: name/logo/support on outward artifacts
 	mux.HandleFunc("PUT /v1/settings/branding", d.auth(d.handlePutBranding))
-	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                   // per-tenant Slack incident webhook (has_slack_webhook)
-	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                   // set + seal the tenant's Slack incident webhook (Bucket B)
+	mux.HandleFunc("GET /v1/settings/notifications", d.auth(d.handleGetNotifySettings))                   // which of the tenant's own channels are configured (presence only)
+	mux.HandleFunc("PUT /v1/settings/notifications", d.auth(d.handlePutNotifySettings))                   // set + seal the tenant's own Slack/Teams/Discord/PagerDuty/webhook destinations (Bucket B)
+	mux.HandleFunc("POST /v1/settings/notifications/test", d.auth(d.handleTestNotifyChannel))             // send ONE labelled test alert to ONE named channel (owner-only via the /v1/settings/ prefix)
 	mux.HandleFunc("GET /v1/settings/drata", d.auth(d.handleGetDrata))                                    // push-to-Drata config (has_key/connected)
 	mux.HandleFunc("PUT /v1/settings/drata", d.auth(d.handlePutDrata))                                    // set + seal the Drata API key + workspace
 	mux.HandleFunc("POST /v1/settings/drata/sync", d.auth(d.handleSyncDrata))                             // push control posture as Drata records
@@ -321,6 +327,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /v1/contacts", d.auth(d.handleListContacts))                                      // on-call escalation roster (names + numbers)
 	mux.HandleFunc("POST /v1/contacts", d.auth(d.handleAddContact))                                       // add a contact
 	mux.HandleFunc("DELETE /v1/contacts/{id}", d.auth(d.handleDeleteContact))                             // remove a contact
+	mux.HandleFunc("POST /v1/research/finding/{id}", d.auth(d.handleResearchFinding))                     // bounded, cited advisory research for one finding (input-to-propose, never evidence)
 	mux.HandleFunc("GET /v1/autonomy", d.auth(d.handleGetAutonomy))                                       // earned autonomy: offers + grants
 	mux.HandleFunc("POST /v1/settings/autonomy", d.auth(d.handleSetAutonomy))                             // owner grants/withdraws earned autonomy for one fix kind
 	mux.HandleFunc("POST /v1/killswitch", d.auth(d.handleKillSwitch))                                     // global kill-switch: halt/resume all agent action
@@ -1034,6 +1041,13 @@ type actionsView struct {
 	// stays at ActApproved so it is not lost — which also makes it indistinguishable, in the list,
 	// from one merely waiting. This count is what makes the difference visible.
 	FailedDelivery int `json:"failed_delivery"`
+	// TicketsClosedStillPresent counts delivered tickets the customer's tracker reports DONE while our
+	// re-test, made after the close, still finds the issue (internal/ticketsync). The most common way a
+	// remediation quietly fails, and the one nobody else in the loop is placed to notice.
+	TicketsClosedStillPresent int `json:"tickets_closed_still_present"`
+	// TicketsUnreadable counts delivered tickets we can no longer read back. Unreadable is not "still
+	// open", so they are counted as what they are rather than left looking in flight.
+	TicketsUnreadable int `json:"tickets_unreadable"`
 }
 
 // handleActions returns ALL the tenant's remediation actions with their fix-verification state —
@@ -1048,6 +1062,14 @@ func (d Deps) handleActions(w http.ResponseWriter, r *http.Request, tenantID str
 	for _, a := range acts {
 		if a.DeliveryError != "" {
 			v.FailedDelivery++
+		}
+		if a.Ticket != nil {
+			if a.Ticket.ClosedStillPresent {
+				v.TicketsClosedStillPresent++
+			}
+			if a.Ticket.SyncError != "" {
+				v.TicketsUnreadable++
+			}
 		}
 		if a.Status != platform.ActApplied || len(a.FindingKeys) == 0 {
 			continue

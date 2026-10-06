@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { api } from "@/lib/api";
 import type {
-  BoardDigestSettings, Branding, BrandingSettings, DeviceSyncResult, EscalationPolicy, HRISSettings, HRISSyncResult, MDMSettings, SLAPolicy, TrustCenterConfig,
+  BoardDigestSettings, Branding, BrandingSettings, DeviceSyncResult, EscalationPolicy, HRISSettings, HRISSyncResult, MDMSettings, NotifyChannel, NotifyPatch, NotifySettings, SLAPolicy, TrustCenterConfig,
 } from "@/lib/types";
 
 // Engage/disengage the global kill-switch (agentic-SMB spec OM-3 / TS-5). When engaged the
@@ -148,12 +148,17 @@ export async function setJira(
   return r;
 }
 
-// Set (or clear) the tenant's own Slack incident webhook (Bucket B). The URL is a bearer
+// Set or clear the tenant's own notification destinations (Bucket B). Each value is a bearer
 // capability, so it is sealed server-side and never returned; we get back only presence.
-export async function setSlackWebhook(slackWebhook: string): Promise<{ has_slack_webhook: boolean }> {
-  const r = await api.setNotifySettings(slackWebhook);
+export async function setNotifyChannels(patch: NotifyPatch): Promise<NotifySettings> {
+  const r = await api.setNotifySettings(patch);
   revalidatePath("/settings");
-  return { has_slack_webhook: r.has_slack_webhook };
+  return r;
+}
+
+// Send one labelled test alert to one channel and report what the destination actually said.
+export async function testNotifyChannel(channel: NotifyChannel): Promise<{ ok: boolean; error?: string }> {
+  return api.testNotifyChannel(channel);
 }
 
 // Set a cloud connection's per-tenant remediation write role (Bucket B). The role/SA is the

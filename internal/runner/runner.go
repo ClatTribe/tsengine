@@ -37,6 +37,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/retest"
 	"github.com/ClatTribe/tsengine/internal/sspm"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/internal/ticketsync"
 	"github.com/ClatTribe/tsengine/pkg/platform"
 	"github.com/ClatTribe/tsengine/pkg/types"
 )
@@ -88,6 +89,14 @@ func scanWith(ctx context.Context, r ScanRunner, a platform.Asset) ([]types.Find
 // implement it makes replay unavailable, and the API says so rather than pretending it ran.
 type ToolReplayer interface {
 	ReplayTool(ctx context.Context, a platform.Asset, toolName string, args tool.Args, replayID string) ([]types.Finding, error)
+}
+
+// ToolOutputReplayer is the optional form that also returns the tool's run summary (tool.Result.Output).
+// It exists for tools whose replay SPENDS something the platform must account for — deepsec reports its
+// model cost there, and a replay path that dropped it would let a tenant's monthly AI ceiling miss the
+// most expensive run it ever made. Optional, so existing replayers need not change.
+type ToolOutputReplayer interface {
+	ReplayToolWithOutput(ctx context.Context, a platform.Asset, toolName string, args tool.Args, replayID string) ([]types.Finding, any, error)
 }
 
 // Tokens resolves a connection's vaulted OAuth token (the secret store). Kept as an
@@ -249,6 +258,10 @@ type Service struct {
 	// Func-typed so the runner never imports the pentest machinery or its network reach; the
 	// composition root wires the prober.
 	Reattacker func(ctx context.Context, tenantID string, keys []string) map[string]retest.ReattackVerdict
+
+	// TicketTracker reads delivered tickets back from the tracker that holds them (two-way ticket sync,
+	// internal/ticketsync). nil → tickets are filed and never read back, which is how it was before.
+	TicketTracker ticketsync.TrackerFor
 
 	// AfterPass, when set, fires on EVERY monitoring pass (unconditionally, unlike AfterScan) — the
 	// hook for time-driven, change-independent work like running due SCHEDULED pentests. Any gating
@@ -645,6 +658,10 @@ func (s *Service) RescanTenant(ctx context.Context, tenantID string) (int, error
 				}
 			}
 		}
+		// Two-way ticket sync, AFTER the re-test so the comment it writes back carries this pass's
+		// verdict. Runs on a degraded pass too: it reads the tracker and compares against whatever
+		// verdict the action already holds; it never derives a verdict from this pass's absences.
+		s.syncTickets(ctx, tenantID)
 		// A-RSP "respond" half: for each NEWLY-OPENED incident, the agent prepares a
 		// response. A critical incident yields a T3 breach-disclosure DRAFT that queues for
 		// a human signature (it can never auto-apply). Best-effort + optional — omit the

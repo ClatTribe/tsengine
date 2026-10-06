@@ -4,6 +4,7 @@ import { ArrowLeft, ShieldAlert, Flame, Wrench, GitPullRequest, Settings2, Ticke
 import { api } from "@/lib/api";
 import { RUNG_SHORT, RUNG_TOOLTIP } from "@/lib/evidence-rungs";
 import { LocalizeFinding } from "@/components/findings/localize-finding";
+import { ResearchAdvisory } from "@/components/findings/research-advisory";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
 import { AutofixButton } from "@/components/findings/autofix-button";
 import { SeverityBadge, Tag } from "@/components/ui/primitives";
@@ -262,6 +263,7 @@ export default async function FindingDetail({ params }: { params: Promise<{ id: 
       {/* LOCATE BEFORE FIX. A patch is only as good as knowing which file it belongs in, and a
           scanner's file:line is often approximate or absent — so this sits immediately above AI fix. */}
       <LocalizeFinding findingID={id} />
+      {advisories.length > 0 && <ResearchAdvisory findingID={id} />}
 
       {/* What the TOOL said — the scanner's own output and the exact arguments that produced it.
           Stored since Phase 0 and never shown until now. A security engineer verifies a finding by

@@ -104,6 +104,7 @@ import (
 	"github.com/ClatTribe/tsengine/internal/scheduler"
 	"github.com/ClatTribe/tsengine/internal/secret"
 	"github.com/ClatTribe/tsengine/internal/store"
+	"github.com/ClatTribe/tsengine/internal/ticketsync"
 	_ "github.com/ClatTribe/tsengine/internal/toolsbundle" // register OSS tools so host-side PlanAnchors resolves anchors (else 0 findings)
 	"github.com/ClatTribe/tsengine/internal/tracer/hooks"
 	"github.com/ClatTribe/tsengine/internal/webagent"
@@ -311,23 +312,14 @@ func main() {
 		channelMap["webhook"] = wh
 		log.Print("[platform] generic outbound webhook enabled (signed incident events)")
 	}
-	// Per-tenant Slack routing (Bucket B): each tenant's new-incident heads-up goes to its OWN
-	// configured Slack webhook (sealed, set via Settings → Notifications), with the operator
-	// MultiAlerter as the fallback. The resolver opens the sealed ref per incident; a miss falls
-	// through to the operator channels. So incident notifications are multi-tenant, not one shared
-	// channel. (Approval buttons stay the operator Slack app — those need its interactive endpoint.)
+	// Per-tenant routing (Bucket B): each tenant's new-incident alert goes to EVERY destination it
+	// configured for itself (Slack, Teams, Discord, PagerDuty, signed webhook — sealed, set via
+	// Settings → Notifications), with the operator MultiAlerter as the fallback. The resolver opens the
+	// sealed refs per incident; a miss falls through to the operator channels. (Approval buttons stay
+	// the operator Slack app — those need its interactive endpoint.)
+	tenantChannels := platformapi.NotifyChannelResolver(st, vault)
 	tenantRouter := notify.TenantRouter{
-		Resolve: func(ctx context.Context, tenantID string) (string, bool) {
-			t, gerr := st.GetTenant(ctx, tenantID)
-			if gerr != nil || !t.HasSlackWebhook() {
-				return "", false
-			}
-			url, oerr := vault.Open(t.SlackWebhookRef)
-			if oerr != nil || url == "" {
-				return "", false
-			}
-			return url, true
-		},
+		Channels: tenantChannels,
 		Fallback: alerters, // operator-global channels (may be empty → fallback is a no-op)
 	}
 	// Escalation matrix (Phase 2): when a tenant has an enabled escalation policy, a new incident is
@@ -341,8 +333,9 @@ func main() {
 			}
 			return t.Escalation
 		},
-		Channels: channelMap,
-		Default:  tenantRouter,
+		Channels:       channelMap,
+		TenantChannels: tenantChannels, // a tier's "pagerduty" pages the TENANT's rotation when it has one
+		Default:        tenantRouter,
 	})
 	if os.Getenv("TSENGINE_WEBHOOK_SECRET") == "" {
 		log.Print("[platform] WARNING: inbound webhooks are NOT verified — set TSENGINE_WEBHOOK_SECRET to reject spoofed events")
@@ -727,6 +720,18 @@ func main() {
 	// operator must have enabled live probing (TSENGINE_ACTIVE_EXPLOIT), and the tenant must have
 	// proven ownership of the target. Both fail closed and report "unverified" rather than "clean".
 	svc.Reattacker = apiDeps.ReattackVerdicts
+	// Two-way ticket sync: read delivered tickets back from the tracker that holds them, with the
+	// credentials that filed them, and write the re-test verdict back as a comment. Only trackers that
+	// can be read back take part (Jira today); others keep filing exactly as before.
+	if tf, ok := deliverer.Ticket.(remediate.TenantFiler); ok {
+		svc.TicketTracker = func(ctx context.Context, tenantID string, ref platform.TicketRef) (ticketsync.Tracker, error) {
+			tr, err := tf.TrackerFor(ctx, tenantID, ref)
+			if err != nil {
+				return nil, err
+			}
+			return tr, nil
+		}
+	}
 	// Make the connected cloud account continuously monitored, like SaaS posture and OSINT already
 	// are. Each pass re-reads the account through its read-only role and diffs it against the previous
 	// snapshot, so a bucket that turned public or a principal that gained admin opens an incident on

@@ -31,3 +31,26 @@ export async function localizeFinding(findingID: string): Promise<LocalizeResult
     return { ok: false, error: e instanceof Error ? e.message : "Localization failed" };
   }
 }
+
+export type ResearchResult =
+  | { ok: true; documents: { url: string; title?: string; fetched_at: string; sha256: string; text: string; truncated: boolean }[]; unavailable: { url: string; reason: string }[]; rejected: { url: string; reason: string }[]; note?: string }
+  | { ok: false; error: string };
+
+// researchAdvisory fetches the finding's OWN cited advisory URLs with pinned citations. Triggered, not
+// eager: it makes outbound requests, so a person asks for it. Context only — a finding still rests on a
+// tool predicate, which is why this lives beside the evidence, not inside it.
+export async function researchAdvisory(id: string): Promise<ResearchResult> {
+  try {
+    const r = await api.researchFinding(id);
+    const res = r.result ?? {};
+    return {
+      ok: true,
+      documents: (res.documents ?? []).map((d) => ({ url: d.url, title: d.title, fetched_at: d.fetched_at, sha256: d.sha256, text: d.text, truncated: d.truncated })),
+      unavailable: res.unavailable ?? [],
+      rejected: res.rejected ?? [],
+      note: r.note,
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not research this advisory" };
+  }
+}

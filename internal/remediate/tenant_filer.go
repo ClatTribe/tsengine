@@ -2,7 +2,10 @@ package remediate
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/pkg/platform"
@@ -39,4 +42,71 @@ func (t TenantFiler) FileTicket(ctx context.Context, a platform.Action) error {
 		return t.Fallback.FileTicket(ctx, a)
 	}
 	return nil
+}
+
+// FileTicketRef files like FileTicket and returns the created ticket, stamped with WHOSE tracker holds
+// it — the read-back must use the same credentials that filed it.
+func (t TenantFiler) FileTicketRef(ctx context.Context, a platform.Action) (platform.TicketRef, error) {
+	if t.Resolve != nil {
+		if base, email, token, project, ok := t.Resolve(ctx, a.TenantID); ok {
+			j := connector.NewJira(base, email, token, project)
+			if t.HTTP != nil {
+				j.HTTP = t.HTTP
+			}
+			ref, err := j.FileTicketRef(ctx, a)
+			ref.Destination = "tenant"
+			return ref, err
+		}
+	}
+	if t.Fallback == nil {
+		return platform.TicketRef{}, nil
+	}
+	if rf, ok := t.Fallback.(RefFiler); ok {
+		ref, err := rf.FileTicketRef(ctx, a)
+		ref.Destination = "operator"
+		return ref, err
+	}
+	return platform.TicketRef{}, t.Fallback.FileTicket(ctx, a)
+}
+
+// TicketTracker reads a delivered ticket back and writes to it (satisfied by *connector.Jira).
+type TicketTracker interface {
+	TicketStatus(ctx context.Context, key string) (connector.IssueStatus, error)
+	AddComment(ctx context.Context, key, text string) error
+}
+
+// ErrDestinationMoved is returned when the tenant's Jira now points somewhere other than the site that
+// holds the ticket. Reading the same key from a different site would read a DIFFERENT issue and report
+// its status as this one's — a stranger's "Done" closing our loop.
+var ErrDestinationMoved = errors.New("the Jira destination changed after this ticket was filed, so it can no longer be read back")
+
+// TrackerFor returns the tracker that holds ref, using the same credentials that filed it.
+func (t TenantFiler) TrackerFor(ctx context.Context, tenantID string, ref platform.TicketRef) (TicketTracker, error) {
+	if ref.System != "jira" {
+		return nil, fmt.Errorf("no read-back for %q tickets", ref.System)
+	}
+	switch ref.Destination {
+	case "tenant":
+		if t.Resolve == nil {
+			return nil, errors.New("no tenant Jira resolver")
+		}
+		base, email, token, project, ok := t.Resolve(ctx, tenantID)
+		if !ok {
+			return nil, errors.New("the workspace's Jira is no longer configured")
+		}
+		if ref.URL != "" && !strings.HasPrefix(ref.URL, strings.TrimRight(base, "/")+"/") {
+			return nil, ErrDestinationMoved
+		}
+		j := connector.NewJira(base, email, token, project)
+		if t.HTTP != nil {
+			j.HTTP = t.HTTP
+		}
+		return j, nil
+	case "operator":
+		if tr, ok := t.Fallback.(TicketTracker); ok {
+			return tr, nil
+		}
+		return nil, errors.New("the operator tracker cannot be read back")
+	}
+	return nil, fmt.Errorf("unknown ticket destination %q", ref.Destination)
 }

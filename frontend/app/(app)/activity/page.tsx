@@ -76,6 +76,29 @@ export default async function ActivityPage() {
     }
   }
 
+  // Delivered tickets, read back from the customer's tracker. A ticket closed while our re-test still
+  // finds the issue is the most common way a remediation quietly fails — so it is its own event, not
+  // folded into "did not close".
+  for (const a of actions.actions) {
+    const t = a.ticket;
+    if (!t) continue;
+    if (t.closed_still_present) {
+      events.push({
+        id: `tkt-csp-${a.id}`, at: t.resolved_at || t.last_synced_at || "", day: "", kind: "regressed",
+        title: `Ticket ${t.key} closed in ${t.system} — issue still present`,
+        meta: `Marked “${t.status ?? "done"}”, but our re-test after the close still finds it. We commented on the ticket; we did not reopen it.`,
+        href: t.url || "/inbox",
+      });
+    } else if (t.resolved && t.resolved_at) {
+      events.push({
+        id: `tkt-r-${a.id}`, at: t.resolved_at, day: "", kind: "resolved",
+        title: `Ticket ${t.key} closed in ${t.system} — ${a.title || a.kind}`,
+        meta: "Closed by your team. Closing a ticket is not proof of a fix — the next re-test decides that.",
+        href: t.url || "/inbox",
+      });
+    }
+  }
+
   // Actions whose delivery FAILED. These sit at "approved" so they are not lost, which also means
   // they are invisible: not in the inbox (nothing left to approve) and not a verified fix. Without
   // this the customer's ticket simply never arrives and nothing anywhere says why.
@@ -111,6 +134,28 @@ export default async function ActivityPage() {
             {actions.failed_delivery === 1 ? "approved fix" : "approved fixes"} could not be delivered — the
             integration rejected them. They are approved but never reached their destination; check the
             connection and re-approve.
+          </span>
+        </div>
+      )}
+      {(actions.tickets_closed_still_present ?? 0) > 0 && (
+        <div className="card flex items-center gap-3 border-high/30 px-4 py-3 text-sm">
+          <XCircle className="h-4 w-4 shrink-0 text-high" />
+          <span className="text-muted">
+            <span className="font-medium text-high">{actions.tickets_closed_still_present}</span>{" "}
+            {actions.tickets_closed_still_present === 1 ? "ticket was" : "tickets were"} closed in your tracker,
+            but a re-test made after the close <span className="font-medium text-ink">still finds the issue</span>.
+            We commented on {actions.tickets_closed_still_present === 1 ? "it" : "them"}; reopening is your team&apos;s call.
+          </span>
+        </div>
+      )}
+      {(actions.tickets_unreadable ?? 0) > 0 && (
+        <div className="card flex items-center gap-3 px-4 py-3 text-sm">
+          <ShieldQuestion className="h-4 w-4 shrink-0 text-medium" />
+          <span className="text-muted">
+            <span className="font-medium text-ink">{actions.tickets_unreadable}</span>{" "}
+            {actions.tickets_unreadable === 1 ? "delivered ticket" : "delivered tickets"} could not be read back
+            from your tracker, so we do not know {actions.tickets_unreadable === 1 ? "its" : "their"} status — not that{" "}
+            {actions.tickets_unreadable === 1 ? "it is" : "they are"} still open. Check the Jira connection in Settings.
           </span>
         </div>
       )}

@@ -15,7 +15,7 @@ import { TrustRequestsDesk } from "@/components/settings/trust-requests-desk";
 import { TeamSection } from "@/components/settings/team-section";
 import { KillSwitch } from "@/components/settings/kill-switch";
 import { CloudRemediationControl } from "@/components/settings/cloud-remediation-control";
-import { SlackWebhookControl } from "@/components/settings/slack-webhook-control";
+import { NotificationChannelsControl } from "@/components/settings/notification-channels-control";
 import { GitHubPostureSync } from "@/components/settings/github-posture-sync";
 import { OktaPostureSync } from "@/components/settings/okta-posture-sync";
 import { CloudTrailSync } from "@/components/settings/cloudtrail-sync";
@@ -271,8 +271,8 @@ export default async function SettingsPage() {
       <div>
         <SectionTitle>Notifications</SectionTitle>
         <Card className="space-y-3 p-5">
-          <p className="text-xs text-muted">Where the agent reaches a human. Connect your own Slack below; other channels are provisioned by your administrator.</p>
-          <SlackWebhookControl configured={notify.has_slack_webhook} />
+          <p className="text-xs text-muted">Where the agent reaches a human. Connect your own channels below — each one gets a test button, so you know it works before the night it matters.</p>
+          <NotificationChannelsControl initial={notify} />
           <JiraControl config={jira} />
           <DrataControl initial={drata} />
           <EscalationControl policy={escalation} />

@@ -369,6 +369,37 @@ RUN . /usr/local/bin/ts_want.sh \
 # gated RUN avoids an ENV inside a shell conditional (which Docker cannot parse).
 ENV KICS_QUERIES_PATH=/opt/kics/assets/queries
 
+# deepsec (vercel-labs, Apache-2.0) — agent-driven source review, repository REGISTRY tier only (it costs
+# real money per run, so nothing fires it by default). Needs Node, which this image did not carry, so a
+# pinned official Node tarball is installed under /opt/node rather than the distro's (Ubuntu 22.04 ships
+# Node 12, which deepsec cannot run on). The .tar.gz, not the .tar.xz: this base image has no xz. Installed with npm --omit=dev into /opt/deepsec; the wrapper
+# builds a throwaway workspace per run that SYMLINKS this node_modules and registers only the target.
+#
+# The Codex backend is the only one the wrapper uses: @openai/codex(-sdk) are Apache-2.0. deepsec also
+# pulls @anthropic-ai/claude-agent-sdk, which is under Anthropic's own terms rather than an OSI licence;
+# it is installed because deepsec declares it, never invoked by the wrapper, and is called out in
+# NOTICE-style text here so a redistribution review finds it.
+#
+# FATAL on failure, like kics: a registry tool that silently failed to install would be listed as
+# available and fail at run time with an error nobody can map back to the image.
+ARG NODE_VERSION=22.11.0
+ARG DEEPSEC_VERSION=2.3.10
+RUN . /usr/local/bin/ts_want.sh \
+    && if ts_want repository; then \
+       NODE_ARCH="$([ "${TARGETARCH}" = "amd64" ] && echo x64 || echo arm64)" \
+       && curl -fL --retry 3 --retry-delay 2 -o /tmp/node.tar.gz \
+       "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.gz" \
+       && mkdir -p /opt/node && tar -xzf /tmp/node.tar.gz -C /opt/node --strip-components=1 \
+       && rm -f /tmp/node.tar.gz \
+       && ln -sf /opt/node/bin/node /usr/local/bin/node \
+       && mkdir -p /opt/deepsec \
+       && printf '{"name":"deepsec-runtime","private":true,"type":"module","dependencies":{"deepsec":"%s"}}\n' "${DEEPSEC_VERSION}" > /opt/deepsec/package.json \
+       && cd /opt/deepsec && /opt/node/bin/npm install --omit=dev --no-audit --no-fund --loglevel=error \
+       && ln -sf /opt/deepsec/node_modules/.bin/deepsec /usr/local/bin/deepsec \
+       && /opt/deepsec/node_modules/.bin/deepsec --version \
+       || { echo "FATAL: deepsec install failed (Node ${NODE_VERSION} or deepsec ${DEEPSEC_VERSION}). The repository registry would list a tool that cannot run." >&2; exit 1; } ; \
+    else echo "skip deepsec (TOOLSET=$TS_TOOLSET)"; fi
+
 # syft (SBOM) + hadolint (Dockerfile lint) via release artifacts. syft's
 # install script is anchore's recommended path; hadolint ships per-arch
 # static binaries (Linux-x86_64 / Linux-arm64).

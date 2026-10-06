@@ -125,5 +125,10 @@ var registryNames = []string{
 	// OpenAI×Hugging Face-incident entry vector). Registry (not anchor): most repos carry no model
 	// artifacts, so it fires on demand / when the tree is an ML project, not on every scan.
 	"modelscan",
+	// deepsec — agent-driven source review (vercel-labs, Apache-2.0): a coding agent reads candidate
+	// files and reports what it believes is vulnerable. Registry, and never an escalation trigger: it
+	// spends the tenant's own model budget, so it runs only when someone asks (replay /
+	// dispatch_l2_probe), always with a cost cap, and its findings stay pattern_match.
+	"deepsec",
 	// Phase 3.x: CodeQL, brakeman, staticcheck, snyk-code, terrascan
 }

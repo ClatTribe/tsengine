@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ClatTribe/tsengine/internal/connector"
 	"github.com/ClatTribe/tsengine/internal/runner"
@@ -182,6 +183,13 @@ type Filer interface {
 	FileTicket(ctx context.Context, a platform.Action) error
 }
 
+// RefFiler is the optional form that also returns the created ticket's reference, so the ticket can be
+// read back (internal/ticketsync). A Filer that cannot say what it created still delivers; it just
+// cannot take part in the two-way sync, and the action carries no Ticket.
+type RefFiler interface {
+	FileTicketRef(ctx context.Context, a platform.Action) (platform.TicketRef, error)
+}
+
 // Deliverer applies an approved Action through the connector write path. It resolves
 // the tenant's connection for the action kind, fetches the token, and calls
 // connector.Apply. Implements hitl.Applier.
@@ -278,15 +286,51 @@ func (d *Deliverer) attachPatch(ctx context.Context, a platform.Action, c platfo
 // MR), else falls back to any active connection of the kind the action implies.
 // File-ticket actions are a recorded no-op delivery for the MVP.
 func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
-	// File-ticket and a SIGNED incident-disclosure draft both deliver to the issue tracker
-	// (the draft, now human-signed, is filed for the human to actually send — the agent
-	// never sends regulatory/customer comms itself). No tracker → recorded no-op.
-	if a.Kind == platform.ActFileTicket || a.Kind == platform.ActDraftNotification {
+	_, err := d.ApplyResult(ctx, a)
+	return err
+}
+
+// ApplyResult is Apply returning the action as delivered — today that means carrying the Ticket the
+// tracker created, so the desk persists it (hitl.ResultApplier). The desk writes ITS copy of the action
+// after Apply returns, so a reference stored any other way would be overwritten a moment later.
+func (d *Deliverer) ApplyResult(ctx context.Context, a platform.Action) (platform.Action, error) {
+	if d.isTicket(a) {
 		if d.Ticket == nil {
-			return nil // no issue tracker configured → recorded no-op (graceful)
+			return a, nil // no issue tracker configured → recorded no-op (graceful)
 		}
-		return d.Ticket.FileTicket(ctx, a)
+		if rf, ok := d.Ticket.(RefFiler); ok {
+			ref, err := rf.FileTicketRef(ctx, a)
+			if err != nil {
+				return a, err
+			}
+			if ref.Key != "" { // a tracker that created something we cannot name gives us nothing to sync
+				if ref.FiledAt.IsZero() {
+					ref.FiledAt = time.Now().UTC()
+				}
+				a.Ticket = &ref
+			}
+			return a, nil
+		}
+		return a, d.Ticket.FileTicket(ctx, a)
 	}
+	return a, d.apply(ctx, a)
+}
+
+// isTicket reports whether an action is delivered as an issue-tracker ticket: a file_ticket, a SIGNED
+// incident-disclosure draft (filed for the human to actually send — the agent never sends regulatory or
+// customer comms itself), or a cloud runbook class with no live write path (see apply).
+func (d *Deliverer) isTicket(a platform.Action) bool {
+	if a.Kind == platform.ActFileTicket || a.Kind == platform.ActDraftNotification {
+		return true
+	}
+	if a.Kind == platform.ActApplyConfig {
+		rt, _ := a.Payload["remediation_type"].(string)
+		return cloudRunbookRemediations[rt]
+	}
+	return false
+}
+
+func (d *Deliverer) apply(ctx context.Context, a platform.Action) error {
 	// A cloud remediation whose class has no live connector write yet (the cloudCatalog runbook classes:
 	// open SG, unencrypted-at-rest, public snapshot/DB, missing MFA, disabled logging, root key, weak
 	// password policy, IAM privesc) is a RUNBOOK — the payload carries the exact steps. File it as an
@@ -296,14 +340,7 @@ func (d *Deliverer) Apply(ctx context.Context, a platform.Action) error {
 	// public-access block) is NOT in this set and falls through to the real connector write below. Precise
 	// by construction: the set is only cloudCatalog types, so identity (account_suspend) and live storage
 	// actions are never mis-routed here.
-	if a.Kind == platform.ActApplyConfig {
-		if rt, _ := a.Payload["remediation_type"].(string); cloudRunbookRemediations[rt] {
-			if d.Ticket == nil {
-				return nil // no tracker → recorded no-op (graceful); never a false "applied"
-			}
-			return d.Ticket.FileTicket(ctx, a)
-		}
-	}
+	// (Routed to the tracker by isTicket in ApplyResult before reaching here.)
 	if !deliverable(a.Kind) {
 		return nil // anything else without a write path: recorded, no external write
 	}

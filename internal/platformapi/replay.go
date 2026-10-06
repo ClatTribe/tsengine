@@ -42,6 +42,11 @@ type replayResponse struct {
 	Findings []types.Finding `json:"findings"`
 	Stored   int             `json:"stored"`
 	Note     string          `json:"note,omitempty"`
+	// Notes are things the platform changed about the request and must say (a deepsec cost cap lowered
+	// to the remaining monthly budget). Kept apart from Note, which describes the result.
+	Notes []string `json:"notes,omitempty"`
+	// Summary is the tool's own run summary when it has one (deepsec: cost, files reviewed vs pending).
+	Summary any `json:"summary,omitempty"`
 }
 
 // handleReplay re-runs one tool with the engineer's own arguments against one of their assets.
@@ -90,8 +95,32 @@ func (d Deps) handleReplay(w http.ResponseWriter, r *http.Request, tenantID stri
 		target.Target = t
 	}
 
+	// No caller may supply an internal ("_") argument — those are set by the platform alone.
+	req.Args = stripInternalArgs(req.Args)
+	var notes []string
+	metered := strings.EqualFold(strings.TrimSpace(req.Tool), "deepsec")
+	if metered {
+		args, n, status, msg := d.deepsecReplayArgs(r.Context(), tenantID, req.Args)
+		if status != 0 {
+			writeJSON(w, status, errBody(msg))
+			return
+		}
+		req.Args, notes = args, n
+	}
+
 	replayID := d.newID("replay")
-	findings, err := replayer.ReplayTool(r.Context(), *target, req.Tool, req.Args, replayID)
+	var findings []types.Finding
+	var summary any
+	if or, ok := replayer.(runner.ToolOutputReplayer); ok {
+		findings, summary, err = or.ReplayToolWithOutput(r.Context(), *target, req.Tool, req.Args, replayID)
+	} else {
+		findings, err = replayer.ReplayTool(r.Context(), *target, req.Tool, req.Args, replayID)
+	}
+	if metered {
+		// Recorded whether or not the run succeeded: a failed review can still have spent money, and a
+		// ceiling that only counts successes is one a tenant can pass without being told.
+		d.recordDeepsecSpend(r.Context(), tenantID, summary)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, errBody(err.Error()))
 		return
@@ -100,7 +129,11 @@ func (d Deps) handleReplay(w http.ResponseWriter, r *http.Request, tenantID stri
 	// back is comparable with the rest of the queue rather than a differently-shaped answer.
 	findings = enrichFindings(findings) // one name for this call across the package (ADR 0029 D1b)
 
-	resp := replayResponse{ReplayID: replayID, Tool: req.Tool, Target: target.Target, Findings: findings}
+	resp := replayResponse{ReplayID: replayID, Tool: req.Tool, Target: target.Target, Findings: findings,
+		Notes: notes}
+	if metered {
+		resp.Summary = summary // only for the metered tool: another tool's Output can be its whole raw dump
+	}
 	if req.Store {
 		// ADR 0029 D1a — the third door that enriched and never folded. "Investigate deeper" is the
 		// action a security engineer takes on a finding they already suspect, so a finding it turns up
