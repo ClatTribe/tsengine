@@ -138,15 +138,19 @@ func (d Deps) attemptPatch(ctx context.Context, llm codeagent.LLM, a platform.Ac
 	// The file was read with line-number prefixes ("N: ...", the build-context format the engineer's
 	// prompt needs); fixcheck compares against the CLEAN original, so strip them first — otherwise
 	// every line differs and the checks are meaningless.
-	cleanOriginal := stripLineNumbers(content)
+	cleanOriginal := ""
+	if len(sources) > 0 {
+		cleanOriginal = stripLineNumbers(sources[0].Content)
+	}
 	pairs := make([]fixcheck.File, 0, len(patch.Files))
 	for _, pf := range patch.Files {
 		pairs = append(pairs, fixcheck.File{Path: pf.Path, Original: cleanOriginal, Patched: pf.Content})
 	}
 	sound := fixcheck.Checks(fixcheck.Finding{Endpoint: f.Endpoint}, pairs)
 	if sound.Blocking {
-		return nil, "", fmt.Errorf("the engineer's patch failed a pre-delivery soundness check (%s); the diff is withheld and the instructions below stand",
-			fixcheckFailures(sound))
+		return patchAttempt{outcome: patchRejected, why: "it failed a pre-delivery soundness check",
+			err: fmt.Errorf("the engineer's patch failed a pre-delivery soundness check (%s); the diff is withheld and the instructions below stand",
+				fixcheckFailures(sound))}
 	}
 
 	files := map[string]string{}
