@@ -64,8 +64,16 @@ jobs:
         include:
           - image: platform
             file: docker/platform/Dockerfile
+            context: .
           - image: frontend
             file: frontend/Dockerfile
+            # frontend/Dockerfile is written for context = the frontend/ directory (its
+            # `COPY package.json ./` + `COPY . .` expect that root). The workflow previously
+            # built it with context = repo root, so `COPY package.json` resolved to /package.json
+            # at the repo root — which does not exist — and the frontend image NEVER built. Build
+            # it with the context the Dockerfile was written for. platform stays repo-root (the Go
+            # build needs the whole module tree).
+            context: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -94,7 +102,7 @@ jobs:
       - name: Build + push
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           platforms: linux/amd64,linux/arm64
           push: true
