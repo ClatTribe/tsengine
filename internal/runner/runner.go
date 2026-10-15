@@ -317,14 +317,33 @@ func (s *Service) DiscoverAndScan(ctx context.Context, c platform.Connection) (i
 	// Mirror RescanTenant: keep going, count what scanned, return the first error alongside it so
 	// the caller can report a partial pass as partial. A store error still stops: if assets cannot
 	// be persisted nothing downstream is trustworthy.
+	// One asset per repository, keyed by (type, target). GitHub's Discover returns no id, and this
+	// loop used to mint a FRESH random id for every discovered asset — so each re-discovery (a second
+	// connection on the same org, a reconnect, the scheduled pass) registered the SAME repository
+	// AGAIN under a new id. Findings then stamped one duplicate's id while a product referenced
+	// another, and the product-scoped VAPT read a false "Clear" for a repository that actually had
+	// findings. Reuse the stored asset for a repo we already hold: it keeps the id everything already
+	// points at AND the user's settings on it (data tier, environment, ownership), which re-registering
+	// the bare discovered record would wipe.
+	existing, _ := s.Store.ListAssets(ctx, c.TenantID)
+	byKey := make(map[string]platform.Asset, len(existing))
+	for _, e := range existing {
+		byKey[e.Type+"|"+e.Target] = e
+	}
 	scanned := 0
 	firstErr := capErr
 	for i := range assets {
-		if assets[i].ID == "" {
-			assets[i].ID = s.newID("asset")
-		}
-		if err := s.Store.PutAsset(ctx, assets[i]); err != nil {
-			return scanned, err
+		key := assets[i].Type + "|" + assets[i].Target
+		if prior, ok := byKey[key]; ok {
+			assets[i] = prior // known repo — scan the stored record, never register a second copy
+		} else {
+			if assets[i].ID == "" {
+				assets[i].ID = s.newID("asset")
+			}
+			if err := s.Store.PutAsset(ctx, assets[i]); err != nil {
+				return scanned, err
+			}
+			byKey[key] = assets[i] // a repo repeated within one batch dedups too
 		}
 		if _, _, err := s.scanAsset(ctx, assets[i], platform.TriggerSchedule); err != nil {
 			if firstErr == nil {
