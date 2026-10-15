@@ -202,9 +202,28 @@ func (g *GRC) VAPTReportFor(ctx context.Context, tenantID string, ps *ProductSco
 	var member map[string]bool
 	unattributed := 0
 	if ps != nil {
-		member = make(map[string]bool, len(ps.AssetIDs))
+		// Membership is by TARGET, not only the declared asset ids. One repository can exist as
+		// SEVERAL asset records — GitHub discovery minted a fresh id per connection/pass before the
+		// dedup fix — and a product references only ONE of them, so a finding stamped on a sibling
+		// duplicate fell outside member[] and the product-scoped report read a false "Clear". Expand
+		// membership to every asset that shares a target with a declared product asset (EXACT target
+		// match, never a guess — §10; a more-specific asset under the same host keeps its own target
+		// and stays excluded).
+		byID := make(map[string]platform.Asset, len(assets))
+		for _, a := range assets {
+			byID[a.ID] = a
+		}
+		wantTarget := make(map[string]bool, len(ps.AssetIDs))
 		for _, id := range ps.AssetIDs {
-			member[id] = true
+			if a, ok := byID[id]; ok && a.Target != "" {
+				wantTarget[a.Target] = true
+			}
+		}
+		member = make(map[string]bool, len(assets))
+		for _, a := range assets {
+			if wantTarget[a.Target] {
+				member[a.ID] = true
+			}
 		}
 		kept := findings[:0:0]
 		for _, f := range findings {
@@ -230,8 +249,10 @@ func (g *GRC) VAPTReportFor(ctx context.Context, tenantID string, ps *ProductSco
 		name = t.Name
 	}
 	var scope []string
+	seenTarget := make(map[string]bool)
 	for _, a := range assets {
-		if a.Target != "" && (member == nil || member[a.ID]) {
+		if a.Target != "" && (member == nil || member[a.ID]) && !seenTarget[a.Target] {
+			seenTarget[a.Target] = true
 			scope = append(scope, a.Target)
 		}
 	}
