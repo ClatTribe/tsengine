@@ -77,6 +77,36 @@ func TestVAPTReportFor_ScopesToTheConfirmedProduct(t *testing.T) {
 	}
 }
 
+// A repository can exist as SEVERAL asset records — GitHub discovery minted a fresh id per
+// connection/pass before the dedup fix. A product references only one; a finding stamped on a
+// duplicate sibling must STILL attribute to the product, or the scoped report reads a false "Clear"
+// for a repo that actually has findings. (This was the real bug behind an edunext product reporting
+// "Clear" while the repo carried 100+ dependency CVEs.)
+func TestVAPTReportFor_AttributesFindingsOnDuplicateAssets(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	// Two asset records for the SAME repository, different ids (the duplicate bug).
+	_ = st.PutAsset(ctx, platform.Asset{ID: "repo-1", TenantID: "t", Type: "repository", Target: "https://github.com/acme/edu"})
+	_ = st.PutAsset(ctx, platform.Asset{ID: "repo-2", TenantID: "t", Type: "repository", Target: "https://github.com/acme/edu"})
+	// An SCA finding whose endpoint is a package coordinate (matches no asset target), so it attributes
+	// ONLY via its stamped AssetID — which points at the duplicate the product does not reference.
+	_ = st.PutFinding(ctx, "t", types.Finding{ID: "f-dep", AssetID: "repo-2", Endpoint: "npm:undici@7.25.0",
+		Severity: types.SeverityHigh, RuleID: "osv::GHSA-x", Title: "vulnerable undici"})
+	g := &GRC{Store: st, Now: time.Now}
+
+	// The product was confirmed referencing repo-1; the finding sits on repo-2 (its duplicate).
+	rep, err := g.VAPTReportFor(ctx, "t", &ProductScope{Name: "Edu", AssetIDs: []string{"repo-1"}, ConfirmedBy: "x", ConfirmedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Summary.Total != 1 || len(rep.Findings) != 1 || rep.Findings[0].ID != "f-dep" {
+		t.Fatalf("a finding on a duplicate of the product's repo must attribute to it, not read a false Clear: total=%d", rep.Summary.Total)
+	}
+	if len(rep.Scope) != 1 || rep.Scope[0] != "https://github.com/acme/edu" {
+		t.Fatalf("scope must list the repo once even with duplicate asset records: %v", rep.Scope)
+	}
+}
+
 // Another product's confirmed fix is not evidence about this one.
 func TestVAPTReportFor_RetestRollupCountsOnlyThisProductsFixes(t *testing.T) {
 	ctx := context.Background()
