@@ -81,6 +81,14 @@ type Hardening struct {
 	ReadOnly  bool   // --read-only rootfs (opt-in; relies on the /tmp tmpfs for scratch)
 	User      string // --user (e.g. "65534:65534" = nobody); "" → image default
 	Network   string // --network (e.g. an isolated bridge); "" → docker default
+	// CacheDir is a HOST directory bind-mounted writable at /cache, where the scanners (trivy,
+	// grype) keep their ~1–2GB vulnerability DBs. On the read-only rootfs the only other writable
+	// path is the /tmp tmpfs, which is RAM-backed and so capped by the box's memory — on a small-RAM
+	// host the DB does not fit there ("no space left on device"). A disk-backed CacheDir is both
+	// roomier AND persistent across sandbox runs, so the DB downloads once and is reused, which also
+	// ends the repeated-download timeouts. The host dir must be writable by the sandbox user (chmod
+	// 777 when running as nobody). "" → fall back to the /tmp tmpfs. Set via TSENGINE_SANDBOX_CACHE_DIR.
+	CacheDir string
 }
 
 // DefaultHardening returns the safe, non-breaking defaults: confine resources +
@@ -148,6 +156,7 @@ func HardeningFromEnv() Hardening {
 	}
 	h.User = strings.TrimSpace(os.Getenv("TSENGINE_SANDBOX_USER"))       // "" = image default
 	h.Network = strings.TrimSpace(os.Getenv("TSENGINE_SANDBOX_NETWORK")) // "" = docker default
+	h.CacheDir = strings.TrimSpace(os.Getenv("TSENGINE_SANDBOX_CACHE_DIR"))
 	return h
 }
 
@@ -287,17 +296,6 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 	args := []string{
 		"run", "-d", "--rm",
 		"-e", "TSENGINE_AUTH_TOKEN=" + token,
-		// Give every tool a WRITABLE cache/home on the /tmp tmpfs. The hardened sandbox runs as
-		// nobody (uid 65534) with a read-only rootfs, so a scanner's default cache ($HOME/.cache,
-		// and $HOME is /nonexistent for nobody) cannot be created — trivy and grype both died with
-		// "mkdir /nonexistent: permission denied" while downloading their vulnerability DB, which
-		// silently DEGRADED every repository scan's SCA coverage (the "partially assessed — lost
-		// tools: trivy, grype" the VAPT report kept showing). /tmp is the one writable tmpfs that
-		// survives the read-only rootfs, so point HOME and the scanners' DB caches there.
-		"-e", "HOME=/tmp",
-		"-e", "XDG_CACHE_HOME=/tmp/.cache",
-		"-e", "TRIVY_CACHE_DIR=/tmp/.cache/trivy",
-		"-e", "GRYPE_DB_CACHE_DIR=/tmp/.cache/grype",
 	}
 	// Always-on escape boundary (single source of truth — ConfinementFlags):
 	// cap-drop=ALL + no-new-privileges, and never seccomp/apparmor unconfined.
@@ -317,6 +315,29 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 	// writable /tmp tmpfs apply by default; read-only rootfs / non-root user /
 	// isolated network are opt-in (empty by default).
 	h := opts.Hardening
+
+	// Give every tool a WRITABLE cache/home. The hardened sandbox runs as nobody (uid 65534) with a
+	// read-only rootfs, so a scanner's default cache ($HOME/.cache, and $HOME is /nonexistent for
+	// nobody) cannot be created — trivy and grype both died with "mkdir /nonexistent: permission
+	// denied" while downloading their ~1–2GB vulnerability DB, silently DEGRADING every repository
+	// scan's SCA coverage (the "partially assessed — lost tools: trivy, grype" the VAPT report kept
+	// showing). A disk-backed CacheDir (when set) is the real fix on a small-RAM host: the RAM /tmp
+	// tmpfs is too small for the DB ("no space left on device"), while a bind-mounted host dir is
+	// roomier AND persists the DB across runs (download once → no repeated-download timeouts).
+	// Without a CacheDir, fall back to the /tmp tmpfs — the one writable path on a read-only rootfs.
+	if h.CacheDir != "" {
+		args = append(args, "-v", h.CacheDir+":/cache:rw",
+			"-e", "HOME=/cache",
+			"-e", "XDG_CACHE_HOME=/cache",
+			"-e", "TRIVY_CACHE_DIR=/cache/trivy",
+			"-e", "GRYPE_DB_CACHE_DIR=/cache/grype")
+	} else {
+		args = append(args,
+			"-e", "HOME=/tmp",
+			"-e", "XDG_CACHE_HOME=/tmp/.cache",
+			"-e", "TRIVY_CACHE_DIR=/tmp/.cache/trivy",
+			"-e", "GRYPE_DB_CACHE_DIR=/tmp/.cache/grype")
+	}
 
 	// Connection model:
 	//   - no isolated network (dev / host-run platform): publish the tool-server on the
