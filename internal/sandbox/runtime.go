@@ -87,7 +87,11 @@ type Hardening struct {
 // PIDs + open files and give a writable /tmp, but do NOT force read-only rootfs,
 // a non-root user, or a network (those are opt-in via env / the prod profile).
 func DefaultHardening() Hardening {
-	return Hardening{Memory: "4g", CPUs: "2", PidsLimit: "1024", NoFile: "4096", TmpfsTmp: "512m"}
+	// /tmp is 2g, not a token size: the scanners' vulnerability DBs now cache there (buildRunArgs),
+	// and trivy's DB alone is ~1GB downloaded + extracted — on a 512m tmpfs it would fail for want of
+	// space the same way it failed for want of a writable path, so the fix is only complete with room
+	// for the DB to land.
+	return Hardening{Memory: "4g", CPUs: "2", PidsLimit: "1024", NoFile: "4096", TmpfsTmp: "2g"}
 }
 
 // StrictHardening is the fail-closed production profile: the DefaultHardening
@@ -283,6 +287,17 @@ func buildRunArgs(opts SpawnOptions, port int, token string) []string {
 	args := []string{
 		"run", "-d", "--rm",
 		"-e", "TSENGINE_AUTH_TOKEN=" + token,
+		// Give every tool a WRITABLE cache/home on the /tmp tmpfs. The hardened sandbox runs as
+		// nobody (uid 65534) with a read-only rootfs, so a scanner's default cache ($HOME/.cache,
+		// and $HOME is /nonexistent for nobody) cannot be created — trivy and grype both died with
+		// "mkdir /nonexistent: permission denied" while downloading their vulnerability DB, which
+		// silently DEGRADED every repository scan's SCA coverage (the "partially assessed — lost
+		// tools: trivy, grype" the VAPT report kept showing). /tmp is the one writable tmpfs that
+		// survives the read-only rootfs, so point HOME and the scanners' DB caches there.
+		"-e", "HOME=/tmp",
+		"-e", "XDG_CACHE_HOME=/tmp/.cache",
+		"-e", "TRIVY_CACHE_DIR=/tmp/.cache/trivy",
+		"-e", "GRYPE_DB_CACHE_DIR=/tmp/.cache/grype",
 	}
 	// Always-on escape boundary (single source of truth — ConfinementFlags):
 	// cap-drop=ALL + no-new-privileges, and never seccomp/apparmor unconfined.

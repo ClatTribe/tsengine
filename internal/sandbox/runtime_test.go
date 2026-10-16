@@ -23,6 +23,24 @@ func TestBuildRunArgs_Hardening(t *testing.T) {
 	}
 }
 
+// The hardened sandbox runs as nobody with a read-only rootfs, so HOME defaults to /nonexistent and
+// trivy/grype die with "mkdir /nonexistent: permission denied" when they try to write their
+// vulnerability DB — silently degrading every SCA scan to osv-scanner-only. The spawn MUST point
+// those caches at the writable /tmp tmpfs. This test is the guard against that regression.
+func TestBuildRunArgs_GivesScannersAWritableCache(t *testing.T) {
+	s := argsString(buildRunArgs(SpawnOptions{Image: "img:1"}, 1, "t"))
+	for _, want := range []string{
+		"-e HOME=/tmp",
+		"-e XDG_CACHE_HOME=/tmp/.cache",
+		"-e TRIVY_CACHE_DIR=/tmp/.cache/trivy",
+		"-e GRYPE_DB_CACHE_DIR=/tmp/.cache/grype",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("sandbox must give scanners a writable cache (%q); got %s", want, s)
+		}
+	}
+}
+
 func TestBuildRunArgs_MountsAreReadOnly(t *testing.T) {
 	args := buildRunArgs(SpawnOptions{
 		Image:  "img:1",
@@ -237,7 +255,7 @@ func TestHardeningFromEnv(t *testing.T) {
 		t.Errorf("opt-in controls not applied: %+v", h)
 	}
 	// Untouched fields keep their defaults.
-	if h.PidsLimit != "1024" || h.TmpfsTmp != "512m" {
+	if h.PidsLimit != "1024" || h.TmpfsTmp != "2g" {
 		t.Errorf("untouched defaults changed: %+v", h)
 	}
 }
