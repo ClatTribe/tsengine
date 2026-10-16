@@ -124,6 +124,16 @@ services:
       # image's own non-root USER) so a compromised tool never has uid 0. cap-drop=ALL +
       # no-new-privileges are always-on in the spawn path (sandbox.ConfinementFlags).
       TSENGINE_SANDBOX_USER: "65534:65534"
+      # Disk-backed scanner cache (host dir, bind-mounted into each sandbox at /cache). trivy and
+      # grype download a ~1–2GB vulnerability DB; on a read-only rootfs the only other writable path
+      # is the RAM /tmp tmpfs, which on a small-RAM box is too small for the DB ("no space left on
+      # device", which DEGRADES SCA to osv-scanner only). A disk-backed dir is roomier AND persists
+      # the DB across sandbox runs (download once → no repeated-download timeouts). The host dir must
+      # exist and be writable by the sandbox user — create it once:
+      #   sudo mkdir -p /var/lib/tsengine/scanner-cache && sudo chmod 777 /var/lib/tsengine/scanner-cache
+      TSENGINE_SANDBOX_CACHE_DIR: ${TSENGINE_SANDBOX_CACHE_DIR:-/var/lib/tsengine/scanner-cache}
+      # With the DB on disk, the RAM tmpfs is just scratch — keep it small to spare memory.
+      TSENGINE_SANDBOX_TMPFS_TMP: ${TSENGINE_SANDBOX_TMPFS_TMP:-512m}
       TSENGINE_MONITOR_INTERVAL: ${TSENGINE_MONITOR_INTERVAL:-12h}
       TSENGINE_WEBHOOK_SECRET: ${TSENGINE_WEBHOOK_SECRET:-}
       # Public base URL is the TLS edge (OAuth redirect_uri, webhook callbacks).

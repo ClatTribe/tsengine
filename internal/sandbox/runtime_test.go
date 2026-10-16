@@ -41,6 +41,31 @@ func TestBuildRunArgs_GivesScannersAWritableCache(t *testing.T) {
 	}
 }
 
+// On a small-RAM host the RAM /tmp tmpfs is too small for trivy's ~1–2GB DB ("no space left on
+// device"). A disk-backed CacheDir bind-mounts a roomy, persistent host dir at /cache and points the
+// scanners there instead of the tmpfs. This test guards that wiring (and that the tmpfs fallback is
+// not used when a CacheDir is set).
+func TestBuildRunArgs_DiskBackedScannerCache(t *testing.T) {
+	s := argsString(buildRunArgs(SpawnOptions{
+		Image:     "img:1",
+		Hardening: Hardening{CacheDir: "/var/lib/tsengine/scanner-cache"},
+	}, 1, "t"))
+	for _, want := range []string{
+		"-v /var/lib/tsengine/scanner-cache:/cache:rw",
+		"-e HOME=/cache",
+		"-e TRIVY_CACHE_DIR=/cache/trivy",
+		"-e GRYPE_DB_CACHE_DIR=/cache/grype",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("a disk-backed cache must bind-mount /cache and point scanners there (%q); got %s", want, s)
+		}
+	}
+	// With a CacheDir set, the scanners must NOT be pointed back at the small RAM tmpfs.
+	if strings.Contains(s, "TRIVY_CACHE_DIR=/tmp/.cache/trivy") {
+		t.Errorf("a disk-backed cache must replace the /tmp tmpfs cache, not sit beside it: %s", s)
+	}
+}
+
 func TestBuildRunArgs_MountsAreReadOnly(t *testing.T) {
 	args := buildRunArgs(SpawnOptions{
 		Image:  "img:1",
