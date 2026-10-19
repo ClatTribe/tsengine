@@ -7,11 +7,50 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/ClatTribe/tsengine/pkg/platform"
 )
+
+// repoAllowSet reads the optional TSENGINE_GITHUB_REPOS allowlist — a comma-separated list of
+// repositories to scan when a GitHub account is connected. GitHub OAuth grants access to EVERY repo
+// the account can see, and Discover would otherwise turn all of them into scanned assets; on an org
+// with dozens of repositories that is both a surprise and a load the deployment may not want. The
+// allowlist lets an operator name exactly which repos matter (e.g. "edunext,eduportal"). Empty/unset
+// → every repo, the original behaviour, so this never changes an existing deployment silently.
+func repoAllowSet() map[string]bool {
+	v := strings.TrimSpace(os.Getenv("TSENGINE_GITHUB_REPOS"))
+	if v == "" {
+		return nil
+	}
+	set := map[string]bool{}
+	for _, p := range strings.Split(v, ",") {
+		if p = strings.ToLower(strings.TrimSpace(p)); p != "" {
+			set[p] = true
+		}
+	}
+	return set
+}
+
+// repoAllowed reports whether a repository's full name ("owner/repo") passes the allowlist. A nil/empty
+// allowlist admits everything. An entry matches EXACTLY on either the full name ("ClatTribe/edunext")
+// or the bare repo name ("edunext") — never a substring, so "edunext" admits ClatTribe/edunext but NOT
+// edunext-test-prep or Schooltribe-edunext, which a substring match would wrongly include.
+func repoAllowed(allow map[string]bool, fullName string) bool {
+	if len(allow) == 0 {
+		return true
+	}
+	fn := strings.ToLower(strings.TrimSpace(fullName))
+	if allow[fn] {
+		return true
+	}
+	if i := strings.LastIndex(fn, "/"); i >= 0 && allow[fn[i+1:]] {
+		return true
+	}
+	return false
+}
 
 // GitHub is the connector for GitHub orgs/repos — the tech-SMB wedge integration.
 // Discover lists repos (→ repository assets); Watch turns a push webhook into a
@@ -121,9 +160,13 @@ func (g *GitHub) Discover(ctx context.Context, c platform.Connection, token stri
 	}
 	var assets []platform.Asset
 	now := time.Now().UTC()
+	allow := repoAllowSet() // optional TSENGINE_GITHUB_REPOS — only these repos become scanned assets
 	for _, r := range repos {
 		if r.Archived {
 			continue // never scan an archived repo
+		}
+		if !repoAllowed(allow, r.FullName) {
+			continue // not in the operator's allowlist — do not turn it into a scanned asset
 		}
 		assets = append(assets, platform.Asset{
 			TenantID: c.TenantID, ConnectionID: c.ID,

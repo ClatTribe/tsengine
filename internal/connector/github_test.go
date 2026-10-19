@@ -98,3 +98,28 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+// The repo allowlist admits a repo by its full name or bare name, exactly — never by substring, so a
+// name like "edunext" cannot accidentally pull in "edunext-test-prep" or "Schooltribe-edunext".
+func TestRepoAllowlist_ExactMatchNeverSubstring(t *testing.T) {
+	allow := map[string]bool{"edunext": true, "clattribe/eduportal": true}
+	cases := []struct {
+		full string
+		want bool
+	}{
+		{"ClatTribe/edunext", true},            // bare-name match
+		{"ClatTribe/eduportal", true},          // full-name match
+		{"ClatTribe/edunext-test-prep", false}, // substring must NOT match
+		{"ClatTribe/Schooltribe-edunext", false},
+		{"ClatTribe/physics-ai", false},
+	}
+	for _, c := range cases {
+		if got := repoAllowed(allow, c.full); got != c.want {
+			t.Errorf("repoAllowed(%q) = %v, want %v", c.full, got, c.want)
+		}
+	}
+	// An empty allowlist admits every repo (backward compatible — unset env changes nothing).
+	if !repoAllowed(nil, "ClatTribe/anything") {
+		t.Error("an empty allowlist must admit every repo")
+	}
+}
