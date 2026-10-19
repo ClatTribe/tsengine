@@ -134,6 +134,12 @@ services:
       TSENGINE_SANDBOX_CACHE_DIR: ${TSENGINE_SANDBOX_CACHE_DIR:-/var/lib/tsengine/scanner-cache}
       # With the DB on disk, the RAM tmpfs is just scratch — keep it small to spare memory.
       TSENGINE_SANDBOX_TMPFS_TMP: ${TSENGINE_SANDBOX_TMPFS_TMP:-512m}
+      # Optional GitHub repo allowlist. GitHub OAuth grants access to EVERY repo the connected account
+      # can see, so Discover would otherwise turn an entire org (dozens of repos) into scanned assets.
+      # Set a comma-separated list — by full name "ClatTribe/edunext" or bare name "edunext" (exact,
+      # never substring) — to scan ONLY those. Empty/unset → every repo (the original behaviour).
+      #   TSENGINE_GITHUB_REPOS=ClatTribe/edunext,ClatTribe/eduportal
+      TSENGINE_GITHUB_REPOS: ${TSENGINE_GITHUB_REPOS:-}
       TSENGINE_MONITOR_INTERVAL: ${TSENGINE_MONITOR_INTERVAL:-12h}
       TSENGINE_WEBHOOK_SECRET: ${TSENGINE_WEBHOOK_SECRET:-}
       # Public base URL is the TLS edge (OAuth redirect_uri, webhook callbacks).
