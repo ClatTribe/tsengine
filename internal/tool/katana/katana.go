@@ -50,7 +50,15 @@ func (*Katana) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 	cmd := exec.CommandContext(ctx, "katana",
 		"-u", target, "-jsonl", "-silent", "-nc",
 		"-d", depth,
-		"-c", "10", // crawl concurrency inside katana
+		"-c", "5", // crawl concurrency inside katana (lowered from 10 to cap peak memory)
+		// MEMORY BOUNDS. A heavy SPA (large JS bundles + many dynamic routes) made katana's -jc/-jsl JS
+		// analysis accumulate UNBOUNDED memory, and the sandbox cgroup OOM-killer SIGKILLed it: measured on
+		// a real Next.js site it filled whatever limit it was given — ~4GB at a 4g cap, ~6GB at a 6g cap —
+		// so raising the limit never helps, it just raises the ceiling it fills. The result was a DEGRADED
+		// pass (katana "failed", its surface lost). These two caps keep the crawl bounded and make katana
+		// EXIT NORMALLY with a partial surface instead of being killed, so the pass is complete, not degraded:
+		"-mrs", "2097152", // max response size 2MB — don't read a huge JS bundle whole (the direct OOM cause)
+		"-ct", "3m", // crawl-duration cap — after 3m katana stops gracefully and returns what it found so far
 		"-fx", // form extraction: emit each page's forms (method/action/params)
 		"-jc", // JS crawl: parse endpoints out of linked JavaScript. Modern apps are SPAs (Angular/React)
 		//       whose routes + REST/API endpoints live ONLY in the JS bundle — a plain HTML crawl sees
