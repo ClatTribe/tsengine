@@ -315,6 +315,7 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 	if fixReady == nil {
 		fixReady = map[string]bool{}
 	}
+	findings = collapseReconSurface(findings)
 	r := &VAPTReport{
 		TenantName: name, GeneratedAt: now, Engine: "tsengine (TensorShield)", Scope: scope,
 		Summary: VAPTSummary{BySeverity: map[string]int{}},
@@ -412,6 +413,45 @@ func ReportFromFindings(findings []types.Finding, scope []string, name string, n
 		r.Summary.RiskRating = "Not assessed"
 	}
 	return r
+}
+
+// reconSurfaceRules are INFO-level recon outputs — "this URL responded" — not vulnerabilities. httpx
+// emits one per live URL, so a crawl of a real app produces dozens of them; listed individually in a
+// VAPT report they inflate the finding count and read as duplicate noise to a reviewer (every row is
+// "HTTP 200 — <server>"). This is exactly the "duplicates bahut" complaint a reader makes of an
+// auto-generated report.
+var reconSurfaceRules = map[string]bool{
+	"httpx::http-service": true,
+}
+
+// collapseReconSurface folds each recon-surface rule's many per-URL findings into ONE representative
+// row carrying the count, so the report discloses the surface honestly (§10 — nothing is dropped, the
+// count is stated) without burying the real vulnerabilities under recon rows. It returns a NEW slice;
+// the caller's findings are never mutated. Non-recon findings pass through unchanged, in order.
+func collapseReconSurface(findings []types.Finding) []types.Finding {
+	out := make([]types.Finding, 0, len(findings))
+	repIdx := map[string]int{} // rule_id -> index of the representative in out
+	count := map[string]int{}  // rule_id -> how many collapsed in
+	for _, f := range findings {
+		if !reconSurfaceRules[f.RuleID] {
+			out = append(out, f)
+			continue
+		}
+		count[f.RuleID]++
+		if _, ok := repIdx[f.RuleID]; ok {
+			continue // already have a representative for this rule
+		}
+		repIdx[f.RuleID] = len(out)
+		out = append(out, f) // append copies the struct — mutating out[idx] below is safe
+	}
+	for rule, idx := range repIdx {
+		if count[rule] > 1 {
+			out[idx].Title = fmt.Sprintf("%d live HTTP services discovered (reachable URLs)", count[rule])
+			out[idx].Description = "Reachable HTTP endpoints found during recon. Informational surface data, not a vulnerability."
+			out[idx].Endpoint = "" // this row represents many URLs, so no single endpoint
+		}
+	}
+	return out
 }
 
 // RetestOutcome is one proven exploit's re-attack result (POST /v1/pentest/{id}/retest), in a shape

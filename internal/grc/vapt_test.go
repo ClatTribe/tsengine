@@ -91,6 +91,53 @@ func TestVAPTReport_GroundedSummaryAndMarkdown(t *testing.T) {
 	}
 }
 
+func TestVAPTReport_CollapsesReconSurfaceDuplicates(t *testing.T) {
+	now := time.Now()
+	findings := []types.Finding{
+		{ID: "r-1", RuleID: "httpx::http-service", Tool: "httpx", Severity: types.SeverityInfo, Title: "HTTP 200 — nginx", Endpoint: "https://acme.example/a"},
+		{ID: "r-2", RuleID: "httpx::http-service", Tool: "httpx", Severity: types.SeverityInfo, Title: "HTTP 200 — nginx", Endpoint: "https://acme.example/b"},
+		{ID: "r-3", RuleID: "httpx::http-service", Tool: "httpx", Severity: types.SeverityInfo, Title: "HTTP 301 — nginx", Endpoint: "https://acme.example/c"},
+		{ID: "v-1", RuleID: "nuclei::sqli", Tool: "nuclei", Severity: types.SeverityHigh, Title: "SQL injection", Endpoint: "https://acme.example/search?q="},
+	}
+	r := ReportFromFindings(findings, []string{"https://acme.example"}, "Acme", now, nil)
+
+	// 3 recon rows collapse to 1 representative; the real vuln stays. Total = 2, not 4.
+	if r.Summary.Total != 2 {
+		t.Fatalf("total = %d, want 2 (3 recon findings collapsed to 1 + 1 real vuln)", r.Summary.Total)
+	}
+	if r.Summary.BySeverity["info"] != 1 {
+		t.Errorf("info count = %d, want 1 (the collapsed recon row)", r.Summary.BySeverity["info"])
+	}
+	// The representative row carries the count so the surface is disclosed, not hidden (§10).
+	var recon *VAPTFinding
+	for i := range r.Findings {
+		if r.Findings[i].RuleID == "httpx::http-service" {
+			recon = &r.Findings[i]
+		}
+	}
+	if recon == nil {
+		t.Fatal("recon surface row missing from report")
+	}
+	if !strings.Contains(recon.Title, "3 live HTTP services") {
+		t.Errorf("recon row title should state the count, got %q", recon.Title)
+	}
+}
+
+func TestVAPTReport_SingleReconFindingIsNotRelabelled(t *testing.T) {
+	now := time.Now()
+	findings := []types.Finding{
+		{ID: "r-1", RuleID: "httpx::http-service", Tool: "httpx", Severity: types.SeverityInfo, Title: "HTTP 200 — nginx", Endpoint: "https://acme.example/a"},
+	}
+	r := ReportFromFindings(findings, []string{"https://acme.example"}, "Acme", now, nil)
+	if r.Summary.Total != 1 {
+		t.Fatalf("total = %d, want 1", r.Summary.Total)
+	}
+	// A single recon finding is left exactly as-is — nothing to collapse, no invented count.
+	if r.Findings[0].Title != "HTTP 200 — nginx" || r.Findings[0].Endpoint != "https://acme.example/a" {
+		t.Errorf("single recon finding should be untouched, got title=%q endpoint=%q", r.Findings[0].Title, r.Findings[0].Endpoint)
+	}
+}
+
 func TestVAPTReport_ConfirmedLeadsUnconfirmed(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()

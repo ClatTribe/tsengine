@@ -57,7 +57,7 @@ func (*Katana) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		// so raising the limit never helps, it just raises the ceiling it fills. The result was a DEGRADED
 		// pass (katana "failed", its surface lost). These two caps keep the crawl bounded and make katana
 		// EXIT NORMALLY with a partial surface instead of being killed, so the pass is complete, not degraded:
-		"-mrs", "2097152", // max response size 2MB — don't read a huge JS bundle whole (the direct OOM cause)
+		"-mrs", "1048576", // max response size 1MB — don't read a huge JS bundle whole (a direct OOM cause)
 		"-ct", "3m", // crawl-duration cap — after 3m katana stops gracefully and returns what it found so far
 		"-fx", // form extraction: emit each page's forms (method/action/params)
 		"-jc", // JS crawl: parse endpoints out of linked JavaScript. Modern apps are SPAs (Angular/React)
@@ -65,9 +65,10 @@ func (*Katana) Run(ctx context.Context, args tool.Args) (tool.Result, error) {
 		//       one URL (the empty shell). -jc recovers the real surface WITHOUT a headless browser
 		//       (no Chromium needed): measured 1 → 1817 URLs on OWASP Juice Shop. The fan-out cap
 		//       (TSENGINE_FANOUT_MAX_URLS) + surface filtration keep the larger surface bounded.
-		"-jsl", // jsluice: deeper JS endpoint extraction (BishopFox jsluice, bundled in katana). Recovers
-		//        param-bearing API endpoints -jc alone misses (e.g. /redirect?to=, /api/Challenges/?key=
-		//        on Juice Shop: 188 → 204 endpoints) — more injection points for the fan-out's sqlmap/dalfox.
+		// -jsl (jsluice deep JS extraction) was REMOVED: it was the primary memory hog — on a large Next.js
+		// SPA its regex analysis of big JS bundles grew UNBOUNDED and OOM-killed the sandbox even at 6GB,
+		// marking the whole web scan DEGRADED. -jc alone reaches the JS-defined surface (measured 29k URLs
+		// in ~84s on a real app) and completes cleanly, so the pass is complete instead of degraded.
 	)
 	stdout, err := cmd.Output()
 	if err != nil {
